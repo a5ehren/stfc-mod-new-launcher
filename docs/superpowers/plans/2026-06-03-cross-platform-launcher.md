@@ -35,9 +35,9 @@ Implemented and verified in the repository:
 - Launch service
 - Launcher self-update check service
 
-Still pending for final integration:
+Current status:
 
-- Commit checkpoints that have not been created yet
+- The launcher implementation plan is complete and recorded in commit d9cb5af
 
 ## File Structure
 
@@ -280,7 +280,7 @@ cd src-tauri && cargo test
 
 Expected: Vitest finds no tests or passes setup, frontend build passes, Rust tests pass.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add package.json pnpm-lock.yaml vitest.config.ts src/test/setup.ts src-tauri/Cargo.toml src-tauri/Cargo.lock src-tauri/src/lib.rs src-tauri/tauri.conf.json src-tauri/capabilities/default.json
@@ -604,7 +604,7 @@ pnpm build
 
 Expected: Rust tests pass and frontend build still passes.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src-tauri/src/errors.rs src-tauri/src/models.rs src-tauri/src/events.rs src-tauri/src/app_state.rs src-tauri/src/commands.rs src-tauri/src/lib.rs
@@ -900,7 +900,7 @@ pnpm build
 
 Expected: Storage and diagnostics tests pass, frontend build passes.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src-tauri/src/storage.rs src-tauri/src/diagnostics.rs src-tauri/src/app_state.rs src-tauri/src/commands.rs src-tauri/src/lib.rs
@@ -1137,7 +1137,7 @@ pnpm build
 
 Expected: locator tests pass, frontend build passes.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src-tauri/src/game_locator.rs src-tauri/src/models.rs src-tauri/src/app_state.rs src-tauri/src/commands.rs src-tauri/src/lib.rs
@@ -1333,7 +1333,7 @@ cd src-tauri && cargo test github_releases::tests
 
 Expected: both release selection tests pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src-tauri/src/github_releases.rs src-tauri/tests/fixtures/github_releases.json src-tauri/src/lib.rs src-tauri/src/models.rs
@@ -1607,7 +1607,7 @@ pnpm build
 
 Expected: all mod manager tests pass.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add src-tauri/src/mod_manager.rs src-tauri/src/commands.rs src-tauri/src/lib.rs
@@ -1822,7 +1822,7 @@ pnpm build
 
 Expected: migration tests pass and frontend build passes.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src-tauri/src/migration.rs src-tauri/src/models.rs src-tauri/src/commands.rs src-tauri/src/lib.rs
@@ -1986,7 +1986,7 @@ pnpm build
 
 Expected: config TOML tests pass and frontend build passes.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add package.json pnpm-lock.yaml src/lib/config
@@ -2137,7 +2137,7 @@ pnpm build
 
 Expected: config service tests pass and frontend build passes.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src-tauri/src/config_service.rs src-tauri/src/commands.rs src-tauri/src/lib.rs
@@ -2283,7 +2283,7 @@ pnpm build
 
 Expected: command wrapper tests pass and frontend build passes.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/types/launcher.ts src/lib/commands.ts src/lib/commands.test.ts
@@ -2795,7 +2795,7 @@ pnpm build
 
 Expected: main launcher test passes and frontend build passes.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add src/App.vue src/assets/lcars src/styles/lcars.css src/components/lcars src/components/StatusStrip.vue src/views/MainLauncher.vue src/views/MainLauncher.test.ts src/views/ConfigEditor.vue
@@ -3161,7 +3161,7 @@ pnpm build
 
 Expected: config editor test passes and frontend build passes.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/views/ConfigEditor.vue src/views/ConfigEditor.test.ts src/components/config
@@ -3677,7 +3677,7 @@ cd src-tauri && cargo test xsolla::tests game_updater::tests
 
 Expected: parser and finalization tests pass.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add src-tauri/src/xsolla.rs src-tauri/src/game_updater.rs src-tauri/src/rsync_patch.rs src-tauri/tests/fixtures/xsolla_plan.xml src-tauri/src/lib.rs
@@ -3875,7 +3875,7 @@ pnpm build
 
 Expected: launch tests pass and frontend build passes.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src-tauri/src/launch.rs src-tauri/src/commands.rs src-tauri/src/lib.rs
@@ -3987,7 +3987,7 @@ pnpm build
 
 Expected: tests and build pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src-tauri/src/self_update.rs src-tauri/src/commands.rs src-tauri/src/lib.rs src-tauri/tauri.conf.json
@@ -4083,7 +4083,7 @@ cd src-tauri && cargo test
 
 Expected: all tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src-tauri/src/commands.rs src/views/MainLauncher.vue src/lib/commands.ts src/types/launcher.ts
@@ -4162,7 +4162,7 @@ git diff --stat
 
 Expected: only intended launcher files, docs, dependency manifests, and lockfiles are changed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add README.md docs/runtime-contracts.md
