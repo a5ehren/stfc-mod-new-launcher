@@ -15,6 +15,7 @@ export interface SyncTargetConfiguration {
 	slots: boolean;
 	tech: boolean;
 	traits: boolean;
+	[key: string]: unknown;
 }
 
 export type SyncTargetsConfiguration = Record<string, SyncTargetConfiguration>;
@@ -25,15 +26,18 @@ export type SyncConfiguration = SyncTargetConfiguration & {
 	debug: boolean;
 	logging: boolean;
 	targets?: SyncTargetsConfiguration;
+	[key: string]: unknown;
 };
 
 export interface BuffsConfiguration {
 	use_out_of_dock_power: boolean;
+	[key: string]: unknown;
 }
 
 export interface ConfigConfiguration {
 	assets_url_override: string;
 	settings_url: string;
+	[key: string]: unknown;
 }
 
 export interface ControlConfiguration {
@@ -43,6 +47,7 @@ export interface ControlConfiguration {
 	use_scopely_hotkeys: boolean;
 	queue_enabled: boolean;
 	select_timer: number;
+	[key: string]: unknown;
 }
 
 export interface GraphicsConfiguration {
@@ -68,6 +73,7 @@ export interface GraphicsConfiguration {
 	ui_scale_viewer: number;
 	use_presets_as_default: boolean;
 	zoom: number;
+	[key: string]: unknown;
 }
 
 export interface PatchesConfiguration {
@@ -86,6 +92,7 @@ export interface PatchesConfiguration {
 	toastbannerhooks: boolean;
 	uiscalehooks: boolean;
 	zoomhooks: boolean;
+	[key: string]: unknown;
 }
 
 export interface ShortcutsConfiguration {
@@ -179,6 +186,7 @@ export interface ShortcutsConfiguration {
 	move_down: string;
 	move_left: string;
 	move_right: string;
+	[key: string]: unknown;
 }
 
 export interface UiConfiguration {
@@ -200,6 +208,7 @@ export interface UiConfiguration {
 	show_hostile_cargo: boolean;
 	show_player_cargo: boolean;
 	show_station_cargo: boolean;
+	[key: string]: unknown;
 }
 
 export interface TomlConfig {
@@ -211,4 +220,5 @@ export interface TomlConfig {
 	shortcuts: ShortcutsConfiguration;
 	ui: UiConfiguration;
 	sync: SyncConfiguration;
+	[key: string]: unknown;
 }

@@ -40,11 +40,14 @@ export function generateToml(
 	}
 
 	// --- Write all non-sync sections first
-	for (const [sectionName, sectionValue] of Object.entries(config)) {
+	for (const [sectionName, sectionValue] of Object.entries(config) as [
+		string,
+		unknown,
+	][]) {
 		if (sectionName.toLowerCase() === "sync") continue;
 		tomlStr += writeSectionFromConfig(
 			sectionName,
-			sectionValue,
+			sectionValue as Record<string, unknown>,
 			undefined,
 			undefined,
 			includeSectionHeader,
@@ -288,7 +291,7 @@ function findDefinition(
 ): ConfigDefinition | undefined {
 	return allDefinitions.find((d) => {
 		const defGroup = d.group?.toLowerCase() ?? "";
-		const defKey = d.key.toLowerCase();
+		const defKey = String(d.key).toLowerCase();
 
 		if (defGroup === section && defKey === key.toLowerCase()) return true;
 

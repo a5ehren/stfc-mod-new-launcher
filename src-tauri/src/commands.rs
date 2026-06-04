@@ -1,4 +1,5 @@
 use crate::app_state::AppState;
+use tauri::Manager;
 use crate::errors::{ErrorDto, LauncherResult};
 use crate::models::LauncherStatus;
 use std::path::PathBuf;
@@ -244,4 +245,67 @@ mod tests {
 
         assert_eq!(persisted.mod_channel, ModChannel::Prerelease);
     }
+}
+
+#[tauri::command]
+pub async fn open_config_editor(
+    app: tauri::AppHandle,
+) -> CommandResult<()> {
+    use tauri::{WebviewUrl, WebviewWindowBuilder};
+    
+    let existing = app.get_webview_window("config-editor");
+    if let Some(window) = existing {
+        window.set_focus().map_err(|err| ErrorDto {
+            kind: "openConfigEditor".into(),
+            message: err.to_string(),
+        })?;
+        return Ok(());
+    }
+    
+    WebviewWindowBuilder::new(
+        &app,
+        "config-editor",
+        WebviewUrl::App("/".into()),
+    )
+    .title("STFC Mod Config")
+    .inner_size(980.0, 720.0)
+    .build()
+    .map_err(|err| ErrorDto {
+        kind: "openConfigEditor".into(),
+        message: err.to_string(),
+    })?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn update_game(_app: tauri::AppHandle, state: State<'_, AppState>) -> CommandResult<()> {
+    let persisted = state.persisted.lock().map_err(|_| ErrorDto {
+        kind: "state".into(),
+        message: "launcher state lock is poisoned".into(),
+    })?;
+    let game_path = persisted.game_path.clone().ok_or_else(|| ErrorDto {
+        kind: "gamePath".into(),
+        message: "game path is not known".into(),
+    })?;
+    
+    // For now, just launch the game - the update logic would go here
+    let platform = crate::models::current_platform();
+    let mod_library = state
+        .paths
+        .mods_dir
+        .join(crate::mod_manager::platform_library_name(platform));
+    let plan =
+        crate::launch::build_launch_plan(platform, &game_path, &mod_library, persisted.launch_mode)
+            .map_err(ErrorDto::from)?;
+    crate::launch::run_launch_plan(&plan).map_err(ErrorDto::from)
+}
+
+#[tauri::command]
+pub fn update_mod(_app: tauri::AppHandle, state: State<'_, AppState>) -> CommandResult<()> {
+    // Placeholder - mod update logic would go here
+    state
+        .diagnostics
+        .info("update_mod", "mod update requested")
+        .map_err(ErrorDto::from)?;
+    Ok(())
 }

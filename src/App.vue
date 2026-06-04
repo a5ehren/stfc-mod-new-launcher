@@ -6,7 +6,7 @@ import MainLauncher from "@/views/MainLauncher.vue";
 import "@/styles/lcars.css";
 
 const windowLabel = getCurrentWindow().label;
-const _activeView = computed(() =>
+const activeView = computed(() =>
 	windowLabel === "config-editor" ? ConfigEditor : MainLauncher,
 );
 </script>

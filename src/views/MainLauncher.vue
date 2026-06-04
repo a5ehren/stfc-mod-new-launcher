@@ -1,16 +1,28 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { getLauncherStatus, setModChannel } from "@/lib/commands";
+import DataCascade from "@/components/lcars/DataCascade.vue";
+import LcarsButton from "@/components/lcars/LcarsButton.vue";
+import LcarsShell from "@/components/lcars/LcarsShell.vue";
+import StatusStrip from "@/components/StatusStrip.vue";
+import {
+	getLauncherStatus,
+	launchGame,
+	openLogs,
+	openRawConfig,
+	setModChannel,
+	updateGame,
+	updateMod,
+} from "@/lib/commands";
 import type { LauncherStatus } from "@/types/launcher";
 
 const status = ref<LauncherStatus | null>(null);
 const message = ref("Initializing launcher");
 
-const _channelLabel = computed(() =>
+const channelLabel = computed(() =>
 	status.value?.modStatus.channel === "prerelease" ? "Prerelease" : "Stable",
 );
 
-const _warning = computed(() => {
+const warning = computed(() => {
 	if (!status.value) return "";
 	if (
 		status.value.game.updateAvailable ||
@@ -28,13 +40,13 @@ async function refresh() {
 		: "Game location required on launch";
 }
 
-async function _toggleChannel() {
+async function toggleChannel() {
 	const next =
 		status.value?.modStatus.channel === "prerelease" ? "stable" : "prerelease";
 	status.value = await setModChannel(next);
 }
 
-async function _openConfigEditor() {
+async function openConfigEditor() {
 	const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
 	const existing = await WebviewWindow.getByLabel("config-editor");
 	if (existing) {
@@ -47,18 +59,6 @@ async function _openConfigEditor() {
 		width: 980,
 		height: 720,
 	});
-}
-
-function _launchGame() {
-	message.value = "Launch requested";
-}
-
-function _updateGame() {
-	message.value = "Game update requested";
-}
-
-function _updateMod() {
-	message.value = "Mod update requested";
 }
 
 onMounted(refresh);

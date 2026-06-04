@@ -10,7 +10,7 @@ const emit = defineEmits<{
 	"update:modelValue": [boolean | number | string];
 }>();
 
-function _update(event: Event) {
+function update(event: Event) {
 	const target = event.target as HTMLInputElement;
 	if (props.definition.type === "checkbox") {
 		emit("update:modelValue", target.checked);

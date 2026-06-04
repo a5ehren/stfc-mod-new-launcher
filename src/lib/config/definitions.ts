@@ -79,13 +79,15 @@ export function generateFullDefinitions(
 
 	// Existing keys in manual definitions
 	const existingKeys = definitions.map(
-		(d) => `${d.group?.toLowerCase()}.${d.key}`,
+		(d) => `${String(d.group ?? "").toLowerCase()}.${String(d.key)}`,
 	);
 
 	// Generate missing definitions from default config
-	const defaultItems = generateNestedDefs(defaultConfig);
+	const defaultItems = generateNestedDefs(
+		defaultConfig as Record<string, unknown>,
+	);
 	const missingItems = defaultItems.filter(
-		(d) => !existingKeys.includes(d.key.toLowerCase()),
+		(d) => !existingKeys.includes(String(d.key).toLowerCase()),
 	);
 
 	return [...definitions, ...missingItems];

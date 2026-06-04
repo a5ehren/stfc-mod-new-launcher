@@ -4,7 +4,7 @@ defineProps<{
 	disabled?: boolean;
 }>();
 
-const _emit = defineEmits<{ click: [] }>();
+const emit = defineEmits<{ click: [] }>();
 </script>
 
 <template>

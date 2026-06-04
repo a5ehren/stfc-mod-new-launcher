@@ -24,6 +24,10 @@ export function openRawConfig(): Promise<void> {
 	return invoke("open_raw_config");
 }
 
+export function openConfigEditor(): Promise<void> {
+	return invoke("open_config_editor");
+}
+
 export function readRawConfig(): Promise<string> {
 	return invoke("read_raw_config");
 }
@@ -40,6 +44,14 @@ export function validateGamePath(
 
 export function launchGame(): Promise<void> {
 	return invoke("launch_game");
+}
+
+export function updateGame(): Promise<void> {
+	return invoke("update_game");
+}
+
+export function updateMod(): Promise<void> {
+	return invoke("update_mod");
 }
 
 export function checkLauncherUpdate(): Promise<LauncherUpdateInfo | null> {

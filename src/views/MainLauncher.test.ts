@@ -23,6 +23,10 @@ vi.mock("@/lib/commands", () => ({
 	setModChannel: vi.fn(),
 	openLogs: vi.fn(),
 	openRawConfig: vi.fn(),
+	openConfigEditor: vi.fn(),
+	launchGame: vi.fn(),
+	updateGame: vi.fn(),
+	updateMod: vi.fn(),
 	onProgress: vi.fn(async () => vi.fn()),
 }));
 

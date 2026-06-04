@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import type { ConfigDefinition } from "@/lib/config/definitions";
+import ConfigField from "./ConfigField.vue";
 
-defineProps<{
+const props = defineProps<{
 	title: string;
 	definitions: ConfigDefinition[];
 	section: Record<string, boolean | number | string>;
 }>();
 
-const _emit = defineEmits<{
+const emit = defineEmits<{
 	updateField: [key: string, value: boolean | number | string];
 }>();
 </script>
@@ -19,8 +20,8 @@ const _emit = defineEmits<{
       v-for="definition in definitions"
       :key="definition.key"
       :definition="definition"
-      :model-value="section[definition.key] ?? ''"
-      @update:model-value="emit('updateField', definition.key, $event)" />
+      :model-value="section[String(definition.key)] ?? ''"
+      @update:model-value="emit('updateField', String(definition.key), $event)" />
   </section>
 </template>
 

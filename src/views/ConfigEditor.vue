@@ -1,5 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
+import ConfigSection from "@/components/config/ConfigSection.vue";
+import DataCascade from "@/components/lcars/DataCascade.vue";
+import LcarsButton from "@/components/lcars/LcarsButton.vue";
+import LcarsShell from "@/components/lcars/LcarsShell.vue";
 import { readRawConfig, saveRawConfig } from "@/lib/commands";
 import { defaultConfig } from "@/lib/config/defaults";
 import { generateToml } from "@/lib/config/toml";
@@ -7,24 +11,24 @@ import type { TomlConfig } from "@/lib/config/types";
 
 const config = ref<TomlConfig>(structuredClone(defaultConfig));
 const savedToml = ref("");
-const _showToml = ref(false);
+const showToml = ref(false);
 const activeSection = ref<keyof TomlConfig>("control");
 
-const _sections = [
-	{ key: "control", label: "Control Panel" },
-	{ key: "graphics", label: "Graphics Settings" },
-	{ key: "shortcuts", label: "Keyboard Shortcuts" },
-	{ key: "sync", label: "Sync Options" },
-	{ key: "ui", label: "Interface" },
-	{ key: "buffs", label: "Buffs" },
-	{ key: "config", label: "Configuration" },
-	{ key: "patches", label: "Patches" },
+const sections = [
+	{ key: "control" as const, label: "Control Panel" },
+	{ key: "graphics" as const, label: "Graphics Settings" },
+	{ key: "shortcuts" as const, label: "Keyboard Shortcuts" },
+	{ key: "sync" as const, label: "Sync Options" },
+	{ key: "ui" as const, label: "Interface" },
+	{ key: "buffs" as const, label: "Buffs" },
+	{ key: "config" as const, label: "Configuration" },
+	{ key: "patches" as const, label: "Patches" },
 ] as const;
 
 const generatedToml = computed(() =>
 	generateToml(config.value, true, true, true, true),
 );
-const _dirty = computed(() => generatedToml.value !== savedToml.value);
+const dirty = computed(() => generatedToml.value !== savedToml.value);
 const currentSection = computed(
 	() =>
 		config.value[activeSection.value] as Record<
@@ -32,9 +36,9 @@ const currentSection = computed(
 			boolean | number | string
 		>,
 );
-const _currentDefinitions = computed(() =>
+const currentDefinitions = computed(() =>
 	Object.keys(currentSection.value).map((key) => ({
-		group: activeSection.value,
+		group: activeSection.value as string,
 		key,
 		label: key,
 		type: (typeof currentSection.value[key] === "boolean"
@@ -46,7 +50,7 @@ const _currentDefinitions = computed(() =>
 	})),
 );
 
-function _updateField(key: string, value: boolean | number | string) {
+function updateField(key: string, value: boolean | number | string) {
 	config.value = {
 		...config.value,
 		[activeSection.value]: {
@@ -56,7 +60,7 @@ function _updateField(key: string, value: boolean | number | string) {
 	};
 }
 
-async function _save() {
+async function save() {
 	await saveRawConfig(generatedToml.value);
 	savedToml.value = generatedToml.value;
 }
