@@ -1,0 +1,2 @@
+git-format-staged --formatter 'biome check --write --files-ignore-unknown=true --no-errors-on-unmatched --stdin-file-path="{}"' '*'
+
