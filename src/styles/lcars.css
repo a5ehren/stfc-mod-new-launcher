@@ -1,0 +1,31 @@
+@font-face {
+	font-family: "Antonio";
+	src: url("../assets/lcars/Antonio-Regular.ttf") format("truetype");
+	font-weight: 100 700;
+	font-display: swap;
+}
+
+:root {
+	color-scheme: dark;
+	--lcars-black: #000;
+	--lcars-violet: #c9f;
+	--lcars-orange: #f80;
+	--lcars-tan: #ffaa90;
+	--lcars-blue: #89f;
+	--lcars-red: #c44;
+	--lcars-gold: #fa0;
+	--lcars-text: #c9f;
+	--lcars-radius: 72px;
+	font-family: "Antonio", "Arial Narrow", sans-serif;
+}
+
+body {
+	margin: 0;
+	background: var(--lcars-black);
+	color: var(--lcars-text);
+	overflow: hidden;
+}
+
+button {
+	font: inherit;
+}

@@ -6,7 +6,18 @@
 		"useIgnoreFile": true
 	},
 	"files": {
-		"includes": ["**", "!!**/dist"]
+		"includes": [
+			"**/*.rs",
+			"**/*.ts",
+			"**/*.json",
+			"**/*.vue",
+			"!!**/dist",
+			"!!**/*.ttf",
+			"!!**/*.woff",
+			"!!**/*.woff2",
+			"!!**/*.eot",
+			"!!**/*.otf"
+		]
 	},
 	"formatter": {
 		"enabled": true,

@@ -38,4 +38,5 @@ chrono = "0.4.44"
 directories = "6.0.0"
 sevenz-rust2 = "0.21.0"
 librsync = "0.2.5"
+tauri-plugin-fs = "2"
 

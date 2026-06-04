@@ -1,14 +1,15 @@
 {
-  "$schema": "../gen/schemas/desktop-schema.json",
-  "identifier": "default",
-  "description": "Default launcher capability",
-  "windows": ["main", "config-editor"],
-  "permissions": [
-    "core:default",
-    "core:webview:allow-create-webview-window",
-    "opener:default",
-    "dialog:default",
-    "process:default",
-    "updater:default"
-  ]
+	"$schema": "../gen/schemas/desktop-schema.json",
+	"identifier": "default",
+	"description": "Default launcher capability",
+	"windows": ["main", "config-editor"],
+	"permissions": [
+		"core:default",
+		"core:webview:allow-create-webview-window",
+		"opener:default",
+		"dialog:default",
+		"process:default",
+		"updater:default",
+		"fs:default"
+	]
 }

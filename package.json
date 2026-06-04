@@ -10,11 +10,15 @@
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"tauri": "tauri",
-		"prepare": "husky"
+		"prepare": "husky",
+		"lint": "biome check --write",
+		"format": "biome format --write",
+		"check": "biome check"
 	},
 	"dependencies": {
 		"@tauri-apps/api": "^2.11.0",
 		"@tauri-apps/plugin-dialog": "^2.7.1",
+		"@tauri-apps/plugin-fs": "~2.5.1",
 		"@tauri-apps/plugin-opener": "^2.5.4",
 		"@tauri-apps/plugin-process": "^2.3.1",
 		"@tauri-apps/plugin-updater": "^2.10.1",
@@ -24,6 +28,7 @@
 	"devDependencies": {
 		"@biomejs/biome": "2.4.16",
 		"@tauri-apps/cli": "^2.11.2",
+		"@types/node": "^25.9.1",
 		"@vitejs/plugin-vue": "^6.0.7",
 		"@vue/test-utils": "^2.4.10",
 		"git-format-staged": "^4.0.1",

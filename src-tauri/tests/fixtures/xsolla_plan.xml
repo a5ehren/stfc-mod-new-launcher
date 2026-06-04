@@ -1,0 +1,7 @@
+<update>
+  <action type="torrent_download" alt_data_link="https://example.test/update.7z" data_size="1234" alt_to="$temp_path/update.7z" />
+  <action type="extract" file="$temp_path/update.7z" to="$temp_path/extracted" />
+  <action type="patch" binaries="$game_path" patch="$temp_path/extracted" />
+  <action type="wait_actions" />
+  <action type="version" version="169" />
+</update>

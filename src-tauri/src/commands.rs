@@ -82,6 +82,114 @@ pub async fn open_logs(app: tauri::AppHandle, state: State<'_, AppState>) -> Com
     Ok(())
 }
 
+#[tauri::command]
+pub fn get_windows_legacy_cleanup_plan(
+    game_root: String,
+) -> CommandResult<crate::migration::LegacyCleanupPlan> {
+    crate::migration::plan_windows_legacy_cleanup(std::path::Path::new(&game_root))
+        .map_err(ErrorDto::from)
+}
+
+#[tauri::command]
+pub fn apply_managed_migration(
+    state: State<'_, AppState>,
+    game_root: String,
+    remove_stale_dll: bool,
+) -> CommandResult<()> {
+    let plan = crate::migration::plan_windows_legacy_cleanup(std::path::Path::new(&game_root))
+        .map_err(ErrorDto::from)?;
+    let moved = crate::migration::apply_file_moves(&plan, &state.paths).map_err(ErrorDto::from)?;
+    state
+        .diagnostics
+        .info("migration", &format!("moved {} legacy files", moved.len()))
+        .map_err(ErrorDto::from)?;
+    if remove_stale_dll {
+        let removed = crate::migration::remove_stale_dll(&plan).map_err(ErrorDto::from)?;
+        if let Some(path) = removed {
+            state
+                .diagnostics
+                .info(
+                    "migration",
+                    &format!("removed stale DLL {}", path.display()),
+                )
+                .map_err(ErrorDto::from)?;
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn read_raw_config(state: State<'_, AppState>) -> CommandResult<String> {
+    crate::config_service::ConfigService::new(state.paths.config_file.clone())
+        .read_config()
+        .map_err(ErrorDto::from)
+}
+
+#[tauri::command]
+pub fn save_raw_config(state: State<'_, AppState>, text: String) -> CommandResult<()> {
+    crate::config_service::ConfigService::new(state.paths.config_file.clone())
+        .write_config(&text)
+        .map_err(ErrorDto::from)
+}
+
+#[tauri::command]
+pub async fn open_raw_config(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> CommandResult<()> {
+    let config_service = crate::config_service::ConfigService::new(state.paths.config_file.clone());
+    config_service
+        .write_config(&config_service.read_config().map_err(ErrorDto::from)?)
+        .map_err(ErrorDto::from)?;
+    app.opener()
+        .open_path(
+            state.paths.config_file.to_string_lossy().to_string(),
+            None::<&str>,
+        )
+        .map_err(|err| ErrorDto {
+            kind: "openRawConfig".into(),
+            message: err.to_string(),
+        })?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn launch_game(_app: tauri::AppHandle, state: State<'_, AppState>) -> CommandResult<()> {
+    let persisted = state.persisted.lock().map_err(|_| ErrorDto {
+        kind: "state".into(),
+        message: "launcher state lock is poisoned".into(),
+    })?;
+    let game_path = persisted.game_path.clone().ok_or_else(|| ErrorDto {
+        kind: "gamePath".into(),
+        message: "game path is not known".into(),
+    })?;
+    let platform = crate::models::current_platform();
+    let mod_library = state
+        .paths
+        .mods_dir
+        .join(crate::mod_manager::platform_library_name(platform));
+    let plan =
+        crate::launch::build_launch_plan(platform, &game_path, &mod_library, persisted.launch_mode)
+            .map_err(ErrorDto::from)?;
+    state
+        .diagnostics
+        .info(
+            "launch",
+            &format!("launching with mode {:?}", persisted.launch_mode),
+        )
+        .map_err(ErrorDto::from)?;
+    crate::launch::run_launch_plan(&plan).map_err(ErrorDto::from)
+}
+
+#[tauri::command]
+pub async fn check_launcher_update(
+    app: tauri::AppHandle,
+) -> CommandResult<Option<crate::self_update::LauncherUpdateInfo>> {
+    crate::self_update::check_for_launcher_update(app)
+        .await
+        .map_err(ErrorDto::from)
+}
+
 fn open_logs_error(message: impl Into<String>) -> ErrorDto {
     ErrorDto {
         kind: "openLogs".into(),
