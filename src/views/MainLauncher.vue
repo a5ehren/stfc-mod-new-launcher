@@ -1,22 +1,24 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import DataCascade from "@/components/lcars/DataCascade.vue";
 import LcarsButton from "@/components/lcars/LcarsButton.vue";
 import LcarsShell from "@/components/lcars/LcarsShell.vue";
 import StatusStrip from "@/components/StatusStrip.vue";
 import {
 	getLauncherStatus,
-	launchGame,
+	launchGame as launchGameCommand,
+	onProgress,
 	openLogs,
 	openRawConfig,
 	setModChannel,
-	updateGame,
-	updateMod,
+	updateGame as updateGameCommand,
+	updateMod as updateModCommand,
 } from "@/lib/commands";
 import type { LauncherStatus } from "@/types/launcher";
 
 const status = ref<LauncherStatus | null>(null);
 const message = ref("Initializing launcher");
+let unlistenProgress: (() => void) | null = null;
 
 const channelLabel = computed(() =>
 	status.value?.modStatus.channel === "prerelease" ? "Prerelease" : "Stable",
@@ -40,6 +42,26 @@ async function refresh() {
 		: "Game location required on launch";
 }
 
+async function launchGame() {
+	message.value = warning.value
+		? `${warning.value}. Launching anyway.`
+		: "Launching game";
+	await launchGameCommand();
+	message.value = "Game launch started";
+}
+
+async function updateGame() {
+	message.value = "Checking for game update";
+	await updateGameCommand();
+	await refresh();
+}
+
+async function updateMod() {
+	message.value = "Checking for mod update";
+	await updateModCommand();
+	await refresh();
+}
+
 async function toggleChannel() {
 	const next =
 		status.value?.modStatus.channel === "prerelease" ? "stable" : "prerelease";
@@ -61,7 +83,17 @@ async function openConfigEditor() {
 	});
 }
 
-onMounted(refresh);
+onMounted(async () => {
+	unlistenProgress = await onProgress((event) => {
+		message.value = event.message;
+	});
+	await refresh();
+});
+
+onBeforeUnmount(() => {
+	unlistenProgress?.();
+	unlistenProgress = null;
+});
 </script>
 
 <template>

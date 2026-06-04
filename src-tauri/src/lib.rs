@@ -43,6 +43,9 @@ pub fn run() {
             commands::save_raw_config,
             commands::open_raw_config,
             commands::launch_game,
+            commands::open_config_editor,
+            commands::update_game,
+            commands::update_mod,
             commands::check_launcher_update,
         ])
         .run(tauri::generate_context!())

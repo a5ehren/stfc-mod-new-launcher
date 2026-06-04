@@ -1,8 +1,9 @@
 use crate::app_state::AppState;
-use tauri::Manager;
 use crate::errors::{ErrorDto, LauncherResult};
+use crate::events::ProgressEvent;
 use crate::models::LauncherStatus;
 use std::path::PathBuf;
+use tauri::{Emitter, Manager};
 use tauri::State;
 use tauri_plugin_opener::OpenerExt;
 
@@ -155,7 +156,7 @@ pub async fn open_raw_config(
 }
 
 #[tauri::command]
-pub fn launch_game(_app: tauri::AppHandle, state: State<'_, AppState>) -> CommandResult<()> {
+pub fn launch_game(app: tauri::AppHandle, state: State<'_, AppState>) -> CommandResult<()> {
     let persisted = state.persisted.lock().map_err(|_| ErrorDto {
         kind: "state".into(),
         message: "launcher state lock is poisoned".into(),
@@ -179,6 +180,10 @@ pub fn launch_game(_app: tauri::AppHandle, state: State<'_, AppState>) -> Comman
             &format!("launching with mode {:?}", persisted.launch_mode),
         )
         .map_err(ErrorDto::from)?;
+    emit_progress(
+        &app,
+        ProgressEvent::message("launch", "starting", "starting game launch"),
+    );
     crate::launch::run_launch_plan(&plan).map_err(ErrorDto::from)
 }
 
@@ -196,6 +201,10 @@ fn open_logs_error(message: impl Into<String>) -> ErrorDto {
         kind: "openLogs".into(),
         message: message.into(),
     }
+}
+
+fn emit_progress(app: &tauri::AppHandle, event: ProgressEvent) {
+    let _ = app.emit("launcher://progress", event);
 }
 
 #[cfg(test)]
@@ -248,11 +257,9 @@ mod tests {
 }
 
 #[tauri::command]
-pub async fn open_config_editor(
-    app: tauri::AppHandle,
-) -> CommandResult<()> {
+pub async fn open_config_editor(app: tauri::AppHandle) -> CommandResult<()> {
     use tauri::{WebviewUrl, WebviewWindowBuilder};
-    
+
     let existing = app.get_webview_window("config-editor");
     if let Some(window) = existing {
         window.set_focus().map_err(|err| ErrorDto {
@@ -261,7 +268,7 @@ pub async fn open_config_editor(
         })?;
         return Ok(());
     }
-    
+
     WebviewWindowBuilder::new(
         &app,
         "config-editor",
@@ -278,34 +285,234 @@ pub async fn open_config_editor(
 }
 
 #[tauri::command]
-pub fn update_game(_app: tauri::AppHandle, state: State<'_, AppState>) -> CommandResult<()> {
-    let persisted = state.persisted.lock().map_err(|_| ErrorDto {
-        kind: "state".into(),
-        message: "launcher state lock is poisoned".into(),
-    })?;
-    let game_path = persisted.game_path.clone().ok_or_else(|| ErrorDto {
-        kind: "gamePath".into(),
-        message: "game path is not known".into(),
-    })?;
-    
-    // For now, just launch the game - the update logic would go here
+pub async fn update_game(app: tauri::AppHandle, state: State<'_, AppState>) -> CommandResult<()> {
+    let diagnostics = state.diagnostics.clone();
+    let staging_dir = state.paths.staging_dir.clone();
+    let game_path = {
+        let persisted = state.persisted.lock().map_err(|_| ErrorDto {
+            kind: "state".into(),
+            message: "launcher state lock is poisoned".into(),
+        })?;
+        persisted.game_path.clone().ok_or_else(|| ErrorDto {
+            kind: "gamePath".into(),
+            message: "game path is not known".into(),
+        })?
+    };
     let platform = crate::models::current_platform();
-    let mod_library = state
-        .paths
-        .mods_dir
-        .join(crate::mod_manager::platform_library_name(platform));
-    let plan =
-        crate::launch::build_launch_plan(platform, &game_path, &mod_library, persisted.launch_mode)
+    let installed_version = crate::game_locator::installed_version(&game_path).unwrap_or(0);
+    let client = reqwest::Client::new();
+    let progress_app = app.clone();
+
+    diagnostics
+        .info(
+            "game_update",
+            &format!(
+                "checking update plan from installed version {} on {:?}",
+                installed_version, platform
+            ),
+        )
+        .map_err(ErrorDto::from)?;
+    emit_progress(
+        &progress_app,
+        ProgressEvent::message(
+            "gameUpdate",
+            "checking",
+            format!("checking game update plan from version {installed_version}"),
+        ),
+    );
+
+    let Some(plan) = crate::game_updater::fetch_update_plan(&client, platform, installed_version)
+        .await
+        .map_err(ErrorDto::from)?
+    else {
+        diagnostics
+            .info("game_update", "game is already at the latest known version")
             .map_err(ErrorDto::from)?;
-    crate::launch::run_launch_plan(&plan).map_err(ErrorDto::from)
+        emit_progress(
+            &progress_app,
+            ProgressEvent::message(
+                "gameUpdate",
+                "complete",
+                "game is already at the latest known version",
+            ),
+        );
+        return Ok(());
+    };
+
+    let context = crate::game_updater::GameUpdateContext {
+        game_root: game_path.clone(),
+        xsolla_temp_root: staging_dir.join("xsolla-temp"),
+        staging_root: staging_dir.join("xsolla-staging"),
+    };
+    let progress_app = progress_app.clone();
+    crate::game_updater::run_update_plan(&client, &plan, &context, move |event| {
+        emit_progress(&progress_app, event);
+    })
+    .await
+    .map_err(ErrorDto::from)?;
+
+    diagnostics
+        .info(
+            "game_update",
+            &format!("completed update plan to version {:?}", plan.target_version),
+        )
+        .map_err(ErrorDto::from)?;
+    Ok(())
 }
 
 #[tauri::command]
-pub fn update_mod(_app: tauri::AppHandle, state: State<'_, AppState>) -> CommandResult<()> {
-    // Placeholder - mod update logic would go here
-    state
-        .diagnostics
-        .info("update_mod", "mod update requested")
+pub async fn update_mod(app: tauri::AppHandle, state: State<'_, AppState>) -> CommandResult<()> {
+    let platform = crate::models::current_platform();
+    let channel = {
+        let persisted = state.persisted.lock().map_err(|_| ErrorDto {
+            kind: "state".into(),
+            message: "launcher state lock is poisoned".into(),
+        })?;
+        persisted.mod_channel
+    };
+    let client = reqwest::Client::new();
+    let diagnostics = state.diagnostics.clone();
+    let progress_app = app.clone();
+
+    diagnostics
+        .info(
+            "mod_update",
+            &format!("checking mod releases for {platform:?} on {channel:?}"),
+        )
         .map_err(ErrorDto::from)?;
+    emit_progress(
+        &progress_app,
+        ProgressEvent::message("modUpdate", "checking", "checking mod release channel"),
+    );
+
+    let releases = crate::github_releases::fetch_releases(&client)
+        .await
+        .map_err(ErrorDto::from)?;
+    let selected =
+        crate::github_releases::select_release_asset(&releases, platform, channel)
+            .map_err(ErrorDto::from)?;
+
+    emit_progress(
+        &progress_app,
+        ProgressEvent::message(
+            "modUpdate",
+            "download",
+            format!("downloading mod archive {}", selected.archive_name),
+        ),
+    );
+    let archive_bytes = client
+        .get(&selected.archive_url)
+        .send()
+        .await
+        .map_err(|source| ErrorDto {
+            kind: "network".into(),
+            message: source.to_string(),
+        })?
+        .error_for_status()
+        .map_err(|source| ErrorDto {
+            kind: "network".into(),
+            message: source.to_string(),
+        })?
+        .bytes()
+        .await
+        .map_err(|source| ErrorDto {
+            kind: "network".into(),
+            message: source.to_string(),
+        })?;
+    let checksum_text = client
+        .get(&selected.checksum_url)
+        .send()
+        .await
+        .map_err(|source| ErrorDto {
+            kind: "network".into(),
+            message: source.to_string(),
+        })?
+        .error_for_status()
+        .map_err(|source| ErrorDto {
+            kind: "network".into(),
+            message: source.to_string(),
+        })?
+        .text()
+        .await
+        .map_err(|source| ErrorDto {
+            kind: "network".into(),
+            message: source.to_string(),
+        })?;
+    let expected_checksum = crate::mod_manager::parse_sha256(&checksum_text).map_err(ErrorDto::from)?;
+
+    let update_dir = tempfile::Builder::new()
+        .prefix("mod-update")
+        .tempdir_in(&state.paths.staging_dir)
+        .map_err(|err| ErrorDto {
+            kind: "operation".into(),
+            message: err.to_string(),
+        })?;
+    let archive_path = update_dir.path().join(&selected.archive_name);
+    std::fs::write(&archive_path, &archive_bytes).map_err(|err| ErrorDto {
+        kind: "io".into(),
+        message: format!("writing {}: {err}", archive_path.display()),
+    })?;
+
+    let actual_checksum = crate::mod_manager::sha256_file(&archive_path).map_err(ErrorDto::from)?;
+    if actual_checksum != expected_checksum {
+        return Err(ErrorDto {
+            kind: "invalidData".into(),
+            message: format!(
+                "checksum mismatch for {}: expected {}, got {}",
+                selected.archive_name, expected_checksum, actual_checksum
+            ),
+        });
+    }
+
+    emit_progress(
+        &progress_app,
+        ProgressEvent::message("modUpdate", "extract", "extracting mod archive"),
+    );
+    let extract_dir = update_dir.path().join("extract");
+    crate::mod_manager::extract_mod_archive(&archive_path, &extract_dir).map_err(ErrorDto::from)?;
+
+    emit_progress(
+        &progress_app,
+        ProgressEvent::message("modUpdate", "install", "installing mod library"),
+    );
+    let installed = crate::mod_manager::install_staged_library(&extract_dir, &state.paths.mods_dir, platform)
+        .map_err(ErrorDto::from)?;
+
+    {
+        let mut persisted = state.persisted.lock().map_err(|_| ErrorDto {
+            kind: "state".into(),
+            message: "launcher state lock is poisoned".into(),
+        })?;
+        persisted.installed_mod_version = Some(selected.version.clone());
+        persisted.installed_mod_checksum = Some(actual_checksum.clone());
+        crate::storage::save_state(&state.paths, &persisted).map_err(ErrorDto::from)?;
+    }
+
+    {
+        let mut status = state.status.lock().map_err(|_| ErrorDto {
+            kind: "state".into(),
+            message: "launcher status lock is poisoned".into(),
+        })?;
+        status.mod_status.installed = true;
+        status.mod_status.installed_version = Some(selected.version.clone());
+        status.mod_status.latest_version = Some(selected.version.clone());
+        status.mod_status.update_available = false;
+    }
+
+    diagnostics
+        .info(
+            "mod_update",
+            &format!(
+                "installed mod release {} to {}",
+                selected.version,
+                installed.display()
+            ),
+        )
+        .map_err(ErrorDto::from)?;
+
+    emit_progress(
+        &progress_app,
+        ProgressEvent::message("modUpdate", "complete", "mod update completed"),
+    );
     Ok(())
 }

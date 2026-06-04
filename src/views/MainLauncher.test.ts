@@ -1,5 +1,6 @@
 import { mount } from "@vue/test-utils";
 import { describe, expect, it, vi } from "vitest";
+import { getLauncherStatus } from "@/lib/commands";
 import MainLauncher from "./MainLauncher.vue";
 
 vi.mock("@/lib/commands", () => ({
@@ -42,5 +43,31 @@ describe("MainLauncher", () => {
 		expect(wrapper.text()).toContain("Update Game");
 		expect(wrapper.text()).toContain("Update Mod");
 		expect(wrapper.text()).toContain("Stable");
+	});
+
+	it("hides update actions when no updates are available", async () => {
+		vi.mocked(getLauncherStatus).mockResolvedValueOnce({
+			game: {
+				known: true,
+				path: "/game",
+				installedVersion: 168,
+				updateAvailable: false,
+			},
+			modStatus: {
+				installed: true,
+				installedVersion: "v1.0.0",
+				latestVersion: "v1.1.0",
+				channel: "stable",
+				updateAvailable: false,
+				launchMode: "managed",
+			},
+			launcherUpdateAvailable: false,
+		});
+
+		const wrapper = mount(MainLauncher);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		expect(wrapper.text()).not.toContain("Update Game");
+		expect(wrapper.text()).not.toContain("Update Mod");
 	});
 });

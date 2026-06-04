@@ -1,6 +1,6 @@
 # Cross-Platform STFC Mod Launcher Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Build the approved Tauri 2 macOS/Windows launcher runtime, with LCARS UI, managed mod updates, config editing, game updates, migration, launch injection, diagnostics, and self-updates.
 
@@ -15,6 +15,29 @@
 The approved design covers several subsystems, but they are tightly coupled around one launcher runtime and shared state. This plan keeps them in one implementation sequence and commits after each coherent vertical slice.
 
 CI/release automation, installer design, notarization workflow, and full STFC game-update rollback stay out of this plan.
+
+## Current Status
+
+Implemented and verified in the repository:
+
+- Tooling, Tauri plugins, and Vitest harness
+- Shared Rust models, errors, events, and app state
+- Managed storage and diagnostics
+- Game locator and manual path validation
+- GitHub release selection and mod install pipeline
+- Migration and Windows fallback cleanup
+- Config TOML model and raw config service
+- Frontend command wrappers and type mirrors
+- LCARS main window and config editor window
+- Xsolla parser, game update finalization, and `update_game`
+- Mod update flow, checksum verification, extraction, and atomic install
+- Frontend progress-event subscription and status updates
+- Launch service
+- Launcher self-update check service
+
+Still pending for final integration:
+
+- Commit checkpoints that have not been created yet
 
 ## File Structure
 
@@ -77,7 +100,7 @@ Test files:
 - Create: `vitest.config.ts`
 - Create: `src/test/setup.ts`
 
-- [ ] **Step 1: Add frontend test and Tauri plugin dependencies**
+- [x] **Step 1: Add frontend test and Tauri plugin dependencies**
 
 Run:
 
@@ -88,7 +111,7 @@ pnpm add -D vitest @vue/test-utils jsdom
 
 Expected: `package.json` and `pnpm-lock.yaml` include the new packages.
 
-- [ ] **Step 2: Add Rust dependencies**
+- [x] **Step 2: Add Rust dependencies**
 
 Run:
 
@@ -102,7 +125,7 @@ cargo add librsync@0.2.5
 
 Expected: `src-tauri/Cargo.toml` and `src-tauri/Cargo.lock` include the new crates.
 
-- [ ] **Step 3: Create Vitest config**
+- [x] **Step 3: Create Vitest config**
 
 Write `vitest.config.ts`:
 
@@ -125,7 +148,7 @@ export default defineConfig({
 });
 ```
 
-- [ ] **Step 4: Create test setup**
+- [x] **Step 4: Create test setup**
 
 Write `src/test/setup.ts`:
 
@@ -151,7 +174,7 @@ vi.mock("@tauri-apps/api/window", () => ({
 }));
 ```
 
-- [ ] **Step 5: Add package scripts**
+- [x] **Step 5: Add package scripts**
 
 Modify `package.json` scripts:
 
@@ -166,7 +189,7 @@ Modify `package.json` scripts:
 }
 ```
 
-- [ ] **Step 6: Configure Tauri plugins and windows**
+- [x] **Step 6: Configure Tauri plugins and windows**
 
 Modify `src-tauri/src/lib.rs` to initialize plugins:
 
@@ -224,7 +247,7 @@ Modify `src-tauri/tauri.conf.json` window section:
 
 Keep the existing icon list inside `bundle`.
 
-- [ ] **Step 7: Configure default capabilities**
+- [x] **Step 7: Configure default capabilities**
 
 Modify `src-tauri/capabilities/default.json`:
 
@@ -245,7 +268,7 @@ Modify `src-tauri/capabilities/default.json`:
 }
 ```
 
-- [ ] **Step 8: Verify baseline**
+- [x] **Step 8: Verify baseline**
 
 Run:
 
@@ -274,7 +297,7 @@ git commit -m "chore: add launcher tooling and plugins"
 - Create: `src-tauri/src/commands.rs`
 - Modify: `src-tauri/src/lib.rs`
 
-- [ ] **Step 1: Write model serialization tests**
+- [x] **Step 1: Write model serialization tests**
 
 Create the test module inside `src-tauri/src/models.rs`:
 
@@ -319,7 +342,7 @@ cd src-tauri && cargo test models::tests::serializes_launcher_status
 
 Expected: FAIL because the types do not exist.
 
-- [ ] **Step 2: Implement shared models**
+- [x] **Step 2: Implement shared models**
 
 Write `src-tauri/src/models.rs`:
 
@@ -399,7 +422,7 @@ impl Default for PersistedState {
 }
 ```
 
-- [ ] **Step 3: Implement serializable error type**
+- [x] **Step 3: Implement serializable error type**
 
 Write `src-tauri/src/errors.rs`:
 
@@ -459,7 +482,7 @@ pub fn io_context(context: impl Into<String>, source: std::io::Error) -> Launche
 }
 ```
 
-- [ ] **Step 4: Implement event payloads**
+- [x] **Step 4: Implement event payloads**
 
 Write `src-tauri/src/events.rs`:
 
@@ -505,7 +528,7 @@ impl ProgressEvent {
 }
 ```
 
-- [ ] **Step 5: Implement app state and status command**
+- [x] **Step 5: Implement app state and status command**
 
 Write `src-tauri/src/app_state.rs`:
 
@@ -570,7 +593,7 @@ Modify `src-tauri/src/lib.rs` to manage state:
 
 Place it before `.invoke_handler(...)`.
 
-- [ ] **Step 6: Verify**
+- [x] **Step 6: Verify**
 
 Run:
 
@@ -597,7 +620,7 @@ git commit -m "feat: add launcher service contracts"
 - Modify: `src-tauri/src/commands.rs`
 - Modify: `src-tauri/src/lib.rs`
 
-- [ ] **Step 1: Write storage tests**
+- [x] **Step 1: Write storage tests**
 
 Add to `src-tauri/src/storage.rs`:
 
@@ -640,7 +663,7 @@ cd src-tauri && cargo test storage::tests
 
 Expected: FAIL because storage code does not exist.
 
-- [ ] **Step 2: Implement managed paths and state persistence**
+- [x] **Step 2: Implement managed paths and state persistence**
 
 Write `src-tauri/src/storage.rs`:
 
@@ -716,7 +739,7 @@ pub fn save_state(paths: &ManagedPaths, state: &PersistedState) -> LauncherResul
 }
 ```
 
-- [ ] **Step 3: Write diagnostics tests**
+- [x] **Step 3: Write diagnostics tests**
 
 Add to `src-tauri/src/diagnostics.rs`:
 
@@ -749,7 +772,7 @@ cd src-tauri && cargo test diagnostics::tests
 
 Expected: FAIL because diagnostics code does not exist.
 
-- [ ] **Step 4: Implement diagnostics service**
+- [x] **Step 4: Implement diagnostics service**
 
 Write `src-tauri/src/diagnostics.rs`:
 
@@ -830,7 +853,7 @@ impl DiagnosticsService {
 }
 ```
 
-- [ ] **Step 5: Wire state and open logs command**
+- [x] **Step 5: Wire state and open logs command**
 
 Extend `AppState`:
 
@@ -866,7 +889,7 @@ pub async fn open_logs(app: tauri::AppHandle, state: State<'_, AppState>) -> Com
 
 Register `open_logs` in `tauri::generate_handler!`.
 
-- [ ] **Step 6: Verify**
+- [x] **Step 6: Verify**
 
 Run:
 
@@ -893,7 +916,7 @@ git commit -m "feat: add managed storage and diagnostics"
 - Modify: `src-tauri/src/commands.rs`
 - Modify: `src-tauri/src/lib.rs`
 
-- [ ] **Step 1: Write locator tests**
+- [x] **Step 1: Write locator tests**
 
 Create `src-tauri/src/game_locator.rs` with tests:
 
@@ -942,7 +965,7 @@ cd src-tauri && cargo test game_locator::tests
 
 Expected: FAIL because the locator does not exist.
 
-- [ ] **Step 2: Implement game locator parser and validation**
+- [x] **Step 2: Implement game locator parser and validation**
 
 Write `src-tauri/src/game_locator.rs`:
 
@@ -1058,7 +1081,7 @@ impl GameLocator {
 }
 ```
 
-- [ ] **Step 3: Add platform detection**
+- [x] **Step 3: Add platform detection**
 
 Add to `models.rs`:
 
@@ -1075,7 +1098,7 @@ pub fn current_platform() -> Platform {
 }
 ```
 
-- [ ] **Step 4: Add locate command shell**
+- [x] **Step 4: Add locate command shell**
 
 Add command in `commands.rs`:
 
@@ -1095,7 +1118,7 @@ pub fn validate_game_path(path: String) -> CommandResult<crate::models::GameStat
 
 Register it in `generate_handler!`.
 
-- [ ] **Step 5: Wire module**
+- [x] **Step 5: Wire module**
 
 Add to `lib.rs`:
 
@@ -1103,7 +1126,7 @@ Add to `lib.rs`:
 mod game_locator;
 ```
 
-- [ ] **Step 6: Verify**
+- [x] **Step 6: Verify**
 
 Run:
 
@@ -1128,7 +1151,7 @@ git commit -m "feat: add game locator"
 - Modify: `src-tauri/src/lib.rs`
 - Modify: `src-tauri/src/models.rs`
 
-- [ ] **Step 1: Add release fixture**
+- [x] **Step 1: Add release fixture**
 
 Create `src-tauri/tests/fixtures/github_releases.json`:
 
@@ -1155,7 +1178,7 @@ Create `src-tauri/tests/fixtures/github_releases.json`:
 ]
 ```
 
-- [ ] **Step 2: Write release selection tests**
+- [x] **Step 2: Write release selection tests**
 
 Create `src-tauri/src/github_releases.rs`:
 
@@ -1198,7 +1221,7 @@ cd src-tauri && cargo test github_releases::tests
 
 Expected: FAIL because release types do not exist.
 
-- [ ] **Step 3: Implement release models and selection**
+- [x] **Step 3: Implement release models and selection**
 
 Write `src-tauri/src/github_releases.rs`:
 
@@ -1292,7 +1315,7 @@ pub async fn fetch_releases(client: &reqwest::Client) -> LauncherResult<Vec<GitH
 }
 ```
 
-- [ ] **Step 4: Wire module**
+- [x] **Step 4: Wire module**
 
 Add to `lib.rs`:
 
@@ -1300,7 +1323,7 @@ Add to `lib.rs`:
 mod github_releases;
 ```
 
-- [ ] **Step 5: Verify**
+- [x] **Step 5: Verify**
 
 Run:
 
@@ -1324,7 +1347,7 @@ git commit -m "feat: select mod release assets"
 - Modify: `src-tauri/src/lib.rs`
 - Modify: `src-tauri/src/commands.rs`
 
-- [ ] **Step 1: Write checksum parser tests**
+- [x] **Step 1: Write checksum parser tests**
 
 Create `src-tauri/src/mod_manager.rs`:
 
@@ -1356,7 +1379,7 @@ cd src-tauri && cargo test mod_manager::tests
 
 Expected: FAIL because parser does not exist.
 
-- [ ] **Step 2: Implement checksum parsing and hashing**
+- [x] **Step 2: Implement checksum parsing and hashing**
 
 Write initial `src-tauri/src/mod_manager.rs`:
 
@@ -1402,7 +1425,7 @@ pub fn sha256_file(path: &Path) -> LauncherResult<String> {
 }
 ```
 
-- [ ] **Step 3: Write archive extraction test**
+- [x] **Step 3: Write archive extraction test**
 
 Add test in `mod_manager.rs`:
 
@@ -1444,7 +1467,7 @@ cd src-tauri && cargo test mod_manager::tests::extracts_single_file_from_tar_zst
 
 Expected: FAIL because extraction does not exist.
 
-- [ ] **Step 4: Implement archive extraction**
+- [x] **Step 4: Implement archive extraction**
 
 Append to `mod_manager.rs`:
 
@@ -1467,7 +1490,7 @@ pub fn extract_mod_archive(archive: &Path, target_dir: &Path) -> LauncherResult<
 }
 ```
 
-- [ ] **Step 5: Write install replacement test**
+- [x] **Step 5: Write install replacement test**
 
 Add test:
 
@@ -1496,7 +1519,7 @@ cd src-tauri && cargo test mod_manager::tests::installs_extracted_library_atomic
 
 Expected: FAIL because install function does not exist.
 
-- [ ] **Step 6: Implement atomic library replacement**
+- [x] **Step 6: Implement atomic library replacement**
 
 Append:
 
@@ -1537,7 +1560,7 @@ pub fn install_staged_library(
 }
 ```
 
-- [ ] **Step 7: Add command shell for mod channel**
+- [x] **Step 7: Add command shell for mod channel**
 
 Add commands:
 
@@ -1567,7 +1590,7 @@ pub fn set_mod_channel(
 
 Register `set_mod_channel`.
 
-- [ ] **Step 8: Wire module and verify**
+- [x] **Step 8: Wire module and verify**
 
 Add to `lib.rs`:
 
@@ -1599,7 +1622,7 @@ git commit -m "feat: install managed mod archives"
 - Modify: `src-tauri/src/commands.rs`
 - Modify: `src-tauri/src/lib.rs`
 
-- [ ] **Step 1: Write migration tests**
+- [x] **Step 1: Write migration tests**
 
 Create `src-tauri/src/migration.rs`:
 
@@ -1649,7 +1672,7 @@ cd src-tauri && cargo test migration::tests
 
 Expected: FAIL because migration code does not exist.
 
-- [ ] **Step 2: Implement migration planning**
+- [x] **Step 2: Implement migration planning**
 
 Write `src-tauri/src/migration.rs`:
 
@@ -1745,7 +1768,7 @@ pub fn remove_stale_dll(plan: &LegacyCleanupPlan) -> LauncherResult<Option<PathB
 }
 ```
 
-- [ ] **Step 3: Add migration commands**
+- [x] **Step 3: Add migration commands**
 
 Add commands:
 
@@ -1782,7 +1805,7 @@ pub fn apply_managed_migration(
 
 Register both commands.
 
-- [ ] **Step 4: Wire module and verify**
+- [x] **Step 4: Wire module and verify**
 
 Add to `lib.rs`:
 
@@ -1819,7 +1842,7 @@ git commit -m "feat: add legacy migration planning"
 - Create: `src/lib/config/toml.test.ts`
 - Modify: `package.json`
 
-- [ ] **Step 1: Add TOML dependency**
+- [x] **Step 1: Add TOML dependency**
 
 Run:
 
@@ -1829,7 +1852,7 @@ pnpm add toml@^4
 
 Expected: `package.json` includes `toml`.
 
-- [ ] **Step 2: Copy config source model from modconfig**
+- [x] **Step 2: Copy config source model from modconfig**
 
 Run:
 
@@ -1858,7 +1881,7 @@ Then update imports:
 - In `definitions.ts`, replace fallback generated descriptions for missing manual metadata with `"Generated definition for config key without manual metadata"`.
 - In every file under `src/lib/config/ui/`, change imports from `../structure` to `../structure`.
 
-- [ ] **Step 3: Normalize structure exports**
+- [x] **Step 3: Normalize structure exports**
 
 Make sure `src/lib/config/structure.ts` exports these names from the copied modconfig structure:
 
@@ -1894,7 +1917,7 @@ export type EditableTarget = { key: string; config: SyncTargetConfiguration };
 
 If copied code references `isPlaceholder`, rename that property to `isGenerated` in both `structure.ts` and `definitions.ts`.
 
-- [ ] **Step 4: Write config TOML tests**
+- [x] **Step 4: Write config TOML tests**
 
 Create `src/lib/config/toml.test.ts`:
 
@@ -1929,7 +1952,7 @@ pnpm test src/lib/config/toml.test.ts
 
 Expected: FAIL until imports and copied paths are corrected.
 
-- [ ] **Step 5: Fix imports and exported names**
+- [x] **Step 5: Fix imports and exported names**
 
 Make sure `src/lib/config/toml.ts` exports:
 
@@ -1952,7 +1975,7 @@ import { allDefinitions } from "./definitions";
 import { groupDisplayNames } from "./structure";
 ```
 
-- [ ] **Step 6: Verify**
+- [x] **Step 6: Verify**
 
 Run:
 
@@ -1977,7 +2000,7 @@ git commit -m "feat: port config TOML model"
 - Modify: `src-tauri/src/commands.rs`
 - Modify: `src-tauri/src/lib.rs`
 
-- [ ] **Step 1: Write config service tests**
+- [x] **Step 1: Write config service tests**
 
 Create `src-tauri/src/config_service.rs`:
 
@@ -2019,7 +2042,7 @@ cd src-tauri && cargo test config_service::tests
 
 Expected: FAIL because service does not exist.
 
-- [ ] **Step 2: Implement ConfigService**
+- [x] **Step 2: Implement ConfigService**
 
 Write `src-tauri/src/config_service.rs`:
 
@@ -2061,7 +2084,7 @@ impl ConfigService {
 }
 ```
 
-- [ ] **Step 3: Add config commands**
+- [x] **Step 3: Add config commands**
 
 Add commands:
 
@@ -2097,7 +2120,7 @@ pub async fn open_raw_config(app: tauri::AppHandle, state: State<'_, AppState>) 
 
 Register commands.
 
-- [ ] **Step 4: Wire module and verify**
+- [x] **Step 4: Wire module and verify**
 
 Add to `lib.rs`:
 
@@ -2128,7 +2151,7 @@ git commit -m "feat: add config file service"
 - Create: `src/lib/commands.ts`
 - Create: `src/lib/commands.test.ts`
 
-- [ ] **Step 1: Write command wrapper tests**
+- [x] **Step 1: Write command wrapper tests**
 
 Create `src/lib/commands.test.ts`:
 
@@ -2168,7 +2191,7 @@ pnpm test src/lib/commands.test.ts
 
 Expected: FAIL because wrappers do not exist.
 
-- [ ] **Step 2: Implement launcher types**
+- [x] **Step 2: Implement launcher types**
 
 Write `src/types/launcher.ts`:
 
@@ -2207,7 +2230,7 @@ export type ProgressEvent = {
 };
 ```
 
-- [ ] **Step 3: Implement command wrappers**
+- [x] **Step 3: Implement command wrappers**
 
 Write `src/lib/commands.ts`:
 
@@ -2249,7 +2272,7 @@ export function onProgress(callback: (event: ProgressEvent) => void): Promise<()
 }
 ```
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 Run:
 
@@ -2281,7 +2304,7 @@ git commit -m "feat: add frontend command wrappers"
 - Create: `src/views/MainLauncher.vue`
 - Create: `src/views/MainLauncher.test.ts`
 
-- [ ] **Step 1: Copy LCARS font assets**
+- [x] **Step 1: Copy LCARS font assets**
 
 Run:
 
@@ -2293,7 +2316,7 @@ cp ~/Downloads/lcars_theme/assets/Antonio-Bold.woff2 src/assets/lcars/Antonio-Bo
 
 Expected: font assets exist under `src/assets/lcars`.
 
-- [ ] **Step 2: Create LCARS CSS tokens**
+- [x] **Step 2: Create LCARS CSS tokens**
 
 Write `src/styles/lcars.css`:
 
@@ -2336,7 +2359,7 @@ button {
 }
 ```
 
-- [ ] **Step 3: Write main window test**
+- [x] **Step 3: Write main window test**
 
 Create `src/views/MainLauncher.test.ts`:
 
@@ -2388,7 +2411,7 @@ pnpm test src/views/MainLauncher.test.ts
 
 Expected: FAIL because view does not exist.
 
-- [ ] **Step 4: Implement LCARS button**
+- [x] **Step 4: Implement LCARS button**
 
 Write `src/components/lcars/LcarsButton.vue`:
 
@@ -2440,7 +2463,7 @@ const emit = defineEmits<{ click: [] }>();
 </style>
 ```
 
-- [ ] **Step 5: Implement data cascade and shell**
+- [x] **Step 5: Implement data cascade and shell**
 
 Write `src/components/lcars/DataCascade.vue`:
 
@@ -2571,7 +2594,7 @@ Write `src/components/lcars/LcarsShell.vue`:
 </style>
 ```
 
-- [ ] **Step 6: Implement status strip and main view**
+- [x] **Step 6: Implement status strip and main view**
 
 Write `src/components/StatusStrip.vue`:
 
@@ -2725,7 +2748,7 @@ onMounted(refresh);
 </style>
 ```
 
-- [ ] **Step 7: Update app entry**
+- [x] **Step 7: Update app entry**
 
 Modify `src/App.vue`:
 
@@ -2761,7 +2784,7 @@ Create initial `src/views/ConfigEditor.vue`:
 </style>
 ```
 
-- [ ] **Step 8: Verify**
+- [x] **Step 8: Verify**
 
 Run:
 
@@ -2788,7 +2811,7 @@ git commit -m "feat: add LCARS main launcher UI"
 - Create: `src/components/config/ConfigField.vue`
 - Create: `src/components/config/SyncTargetsEditor.vue`
 
-- [ ] **Step 1: Write dirty close and preview test**
+- [x] **Step 1: Write dirty close and preview test**
 
 Create `src/views/ConfigEditor.test.ts`:
 
@@ -2827,7 +2850,7 @@ pnpm test src/views/ConfigEditor.test.ts
 
 Expected: FAIL because editor does not exist.
 
-- [ ] **Step 2: Implement generic config field**
+- [x] **Step 2: Implement generic config field**
 
 Write `src/components/config/ConfigField.vue`:
 
@@ -2904,7 +2927,7 @@ input[type="checkbox"] {
 </style>
 ```
 
-- [ ] **Step 3: Implement config section**
+- [x] **Step 3: Implement config section**
 
 Write `src/components/config/ConfigSection.vue`:
 
@@ -2947,7 +2970,7 @@ h2 {
 </style>
 ```
 
-- [ ] **Step 4: Implement sync target list component**
+- [x] **Step 4: Implement sync target list component**
 
 Write `src/components/config/SyncTargetsEditor.vue`:
 
@@ -2976,7 +2999,7 @@ h3 {
 </style>
 ```
 
-- [ ] **Step 5: Implement config editor**
+- [x] **Step 5: Implement config editor**
 
 Write `src/views/ConfigEditor.vue`:
 
@@ -3127,7 +3150,7 @@ textarea {
 </style>
 ```
 
-- [ ] **Step 6: Verify**
+- [x] **Step 6: Verify**
 
 Run:
 
@@ -3153,7 +3176,7 @@ git commit -m "feat: add config editor window"
 - Create: `src-tauri/src/rsync_patch.rs`
 - Modify: `src-tauri/src/lib.rs`
 
-- [ ] **Step 1: Add Xsolla XML fixture**
+- [x] **Step 1: Add Xsolla XML fixture**
 
 Create `src-tauri/tests/fixtures/xsolla_plan.xml`:
 
@@ -3167,7 +3190,7 @@ Create `src-tauri/tests/fixtures/xsolla_plan.xml`:
 </update>
 ```
 
-- [ ] **Step 2: Write Xsolla parser tests**
+- [x] **Step 2: Write Xsolla parser tests**
 
 Create `src-tauri/src/xsolla.rs`:
 
@@ -3202,7 +3225,7 @@ cd src-tauri && cargo test xsolla::tests
 
 Expected: FAIL because parser does not exist.
 
-- [ ] **Step 3: Implement Xsolla parser and path guard**
+- [x] **Step 3: Implement Xsolla parser and path guard**
 
 Write `src-tauri/src/xsolla.rs`:
 
@@ -3321,7 +3344,7 @@ pub fn normalize_relative_patch_path(path: &str) -> LauncherResult<String> {
 }
 ```
 
-- [ ] **Step 4: Write finalization ordering test**
+- [x] **Step 4: Write finalization ordering test**
 
 Create `src-tauri/src/game_updater.rs`:
 
@@ -3355,7 +3378,7 @@ cd src-tauri && cargo test game_updater::tests
 
 Expected: FAIL because finalization does not exist.
 
-- [ ] **Step 5: Implement finalization helpers**
+- [x] **Step 5: Implement finalization helpers**
 
 Write `src-tauri/src/game_updater.rs`:
 
@@ -3418,7 +3441,7 @@ fn write_installed_game_version(game_root: &Path, version: u32) -> LauncherResul
 }
 ```
 
-- [ ] **Step 6: Add librsync wrapper skeleton**
+- [x] **Step 6: Add librsync wrapper skeleton**
 
 Write `src-tauri/src/rsync_patch.rs`:
 
@@ -3444,7 +3467,7 @@ pub fn apply_rsync_patch(source: &Path, patch: &Path, output: &Path) -> Launcher
 }
 ```
 
-- [ ] **Step 7: Add Xsolla action runner types**
+- [x] **Step 7: Add Xsolla action runner types**
 
 Append to `src-tauri/src/game_updater.rs`:
 
@@ -3482,7 +3505,7 @@ pub fn extract_7z_archive(archive: &Path, destination: &Path) -> LauncherResult<
 }
 ```
 
-- [ ] **Step 8: Add Xsolla action runner**
+- [x] **Step 8: Add Xsolla action runner**
 
 Append to `src-tauri/src/game_updater.rs`:
 
@@ -3636,7 +3659,7 @@ pub async fn run_update_plan(
 }
 ```
 
-- [ ] **Step 9: Wire modules and verify**
+- [x] **Step 9: Wire modules and verify**
 
 Add to `lib.rs`:
 
@@ -3668,7 +3691,7 @@ git commit -m "feat: add Xsolla update core"
 - Modify: `src-tauri/src/commands.rs`
 - Modify: `src-tauri/src/lib.rs`
 
-- [ ] **Step 1: Write launch command construction tests**
+- [x] **Step 1: Write launch command construction tests**
 
 Create `src-tauri/src/launch.rs`:
 
@@ -3718,7 +3741,7 @@ cd src-tauri && cargo test launch::tests
 
 Expected: FAIL because launch code does not exist.
 
-- [ ] **Step 2: Implement launch plan construction**
+- [x] **Step 2: Implement launch plan construction**
 
 Write `src-tauri/src/launch.rs`:
 
@@ -3806,7 +3829,7 @@ pub fn run_launch_plan(plan: &LaunchPlan) -> LauncherResult<()> {
 }
 ```
 
-- [ ] **Step 3: Add launch command shell**
+- [x] **Step 3: Add launch command shell**
 
 Add command:
 
@@ -3835,7 +3858,7 @@ pub fn launch_game(state: State<'_, AppState>) -> CommandResult<()> {
 
 Register `launch_game`.
 
-- [ ] **Step 4: Wire module and verify**
+- [x] **Step 4: Wire module and verify**
 
 Add to `lib.rs`:
 
@@ -3867,7 +3890,7 @@ git commit -m "feat: add platform launch planning"
 - Modify: `src-tauri/src/lib.rs`
 - Modify: `src-tauri/tauri.conf.json`
 
-- [ ] **Step 1: Generate updater signing keys**
+- [x] **Step 1: Generate updater signing keys**
 
 Run:
 
@@ -3878,7 +3901,7 @@ pnpm tauri signer generate -w ~/.tauri/stfc-mod-launcher.key
 
 Expected: the command prints a public key and writes the private key to `~/.tauri/stfc-mod-launcher.key`. Store the private key outside the repo. Copy the printed public key for the next step.
 
-- [ ] **Step 2: Add updater config**
+- [x] **Step 2: Add updater config**
 
 Modify `src-tauri/tauri.conf.json`:
 
@@ -3897,7 +3920,7 @@ Modify `src-tauri/tauri.conf.json`:
 
 Use the actual repository owner/name for this launcher if it differs from `netniV/stfc-mod-new-launcher`. The public key string must come from the Tauri updater signing key generated for this launcher.
 
-- [ ] **Step 3: Write self-update service**
+- [x] **Step 3: Write self-update service**
 
 Write `src-tauri/src/self_update.rs`:
 
@@ -3934,7 +3957,7 @@ pub async fn check_for_launcher_update(app: tauri::AppHandle) -> LauncherResult<
 }
 ```
 
-- [ ] **Step 4: Add commands**
+- [x] **Step 4: Add commands**
 
 Add commands:
 
@@ -3947,7 +3970,7 @@ pub async fn check_launcher_update(app: tauri::AppHandle) -> CommandResult<Optio
 
 Register command.
 
-- [ ] **Step 5: Wire module and verify**
+- [x] **Step 5: Wire module and verify**
 
 Add to `lib.rs`:
 
@@ -3979,7 +4002,7 @@ git commit -m "feat: add launcher self-update check"
 - Modify: `src/lib/commands.ts`
 - Modify: `src/types/launcher.ts`
 
-- [ ] **Step 1: Extend frontend wrappers**
+- [x] **Step 1: Extend frontend wrappers**
 
 Add to `src/lib/commands.ts`:
 
@@ -4001,7 +4024,7 @@ export function applyManagedMigration(gameRoot: string, removeStaleDll: boolean)
 }
 ```
 
-- [ ] **Step 2: Connect main buttons to commands**
+- [x] **Step 2: Connect main buttons to commands**
 
 Modify `MainLauncher.vue` imports:
 
@@ -4027,7 +4050,7 @@ async function launchGame() {
 }
 ```
 
-- [ ] **Step 3: Emit progress from backend commands**
+- [x] **Step 3: Emit progress from backend commands**
 
 Add helper in `commands.rs`:
 
@@ -4048,7 +4071,7 @@ emit_progress(
 
 Change `launch_game` signature to include `app: tauri::AppHandle`.
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 Run:
 
@@ -4073,7 +4096,7 @@ git commit -m "feat: connect launcher actions"
 - Modify: `README.md`
 - Create: `docs/runtime-contracts.md`
 
-- [ ] **Step 1: Document runtime contracts**
+- [x] **Step 1: Document runtime contracts**
 
 Write `docs/runtime-contracts.md`:
 
@@ -4102,7 +4125,7 @@ Managed mode keeps mod files in launcher app data.
 Fallback proxy-DLL mode copies `version.dll` into the game folder and keeps config/logs there, matching the current Windows mod behavior.
 ```
 
-- [ ] **Step 2: Update README**
+- [x] **Step 2: Update README**
 
 Append to `README.md`:
 
@@ -4114,7 +4137,7 @@ This launcher is a Tauri 2 app for macOS and Windows. It downloads the platform 
 Runtime asset contracts are documented in `docs/runtime-contracts.md`.
 ```
 
-- [ ] **Step 3: Run full validation**
+- [x] **Step 3: Run full validation**
 
 Run:
 
@@ -4122,13 +4145,13 @@ Run:
 pnpm test
 pnpm build
 cd src-tauri && cargo test
-cargo tauri build --debug
+pnpm tauri build --debug
 git diff --check
 ```
 
 Expected: all tests pass, frontend build passes, Tauri debug build succeeds, whitespace check passes.
 
-- [ ] **Step 4: Review final diff**
+- [x] **Step 4: Review final diff**
 
 Run:
 
