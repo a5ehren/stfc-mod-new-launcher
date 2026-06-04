@@ -1,0 +1,20 @@
+[
+  {
+    "tag_name": "v1.3.0-beta.1",
+    "prerelease": true,
+    "assets": [
+      { "name": "stfc-community-mod-windows-x64.tar.zst", "browser_download_url": "https://example.test/win-beta.tar.zst" },
+      { "name": "stfc-community-mod-windows-x64.tar.zst.sha256", "browser_download_url": "https://example.test/win-beta.sha256" }
+    ]
+  },
+  {
+    "tag_name": "v1.2.0",
+    "prerelease": false,
+    "assets": [
+      { "name": "stfc-community-mod-windows-x64.tar.zst", "browser_download_url": "https://example.test/win.tar.zst" },
+      { "name": "stfc-community-mod-windows-x64.tar.zst.sha256", "browser_download_url": "https://example.test/win.sha256" },
+      { "name": "stfc-community-mod-macos-universal.tar.zst", "browser_download_url": "https://example.test/mac.tar.zst" },
+      { "name": "stfc-community-mod-macos-universal.tar.zst.sha256", "browser_download_url": "https://example.test/mac.sha256" }
+    ]
+  }
+]
