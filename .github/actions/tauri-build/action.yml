@@ -31,13 +31,13 @@ runs:
 
     - name: Install Rust stable with targets
       if: inputs.rust_targets != ''
-      uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8
+      uses: dtolnay/rust-toolchain@stable
       with:
         targets: ${{ inputs.rust_targets }}
 
     - name: Install Rust stable
       if: inputs.rust_targets == ''
-      uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8
+      uses: dtolnay/rust-toolchain@stable
 
     - name: Cargo cache
       uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae
