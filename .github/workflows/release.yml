@@ -61,6 +61,8 @@ jobs:
         uses: ./.github/actions/tauri-package
         with:
           platform: windows
+          arch: x64
+          windows_file_name: stfc-mod-new-launcher-${{ github.event.release.tag_name }}-windows-x64.msi
           release_tag: ${{ github.event.release.tag_name }}
 
       - name: Upload Windows release assets
@@ -69,4 +71,37 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ github.event.release.tag_name }}
-          files: release-assets/*
+          files: release-assets/stfc-mod-new-launcher-${{ github.event.release.tag_name }}-windows-x64.msi
+
+  build-windows-arm64:
+    name: Build Windows ARM64 bundle
+    runs-on: windows-11-arm
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          persist-credentials: false
+
+      - name: Build Windows ARM64 bundle
+        uses: ./.github/actions/tauri-build
+        with:
+          rust_targets: aarch64-pc-windows-msvc
+          build_command: pnpm build:windows:arm64
+
+      - name: Package Windows ARM64 release assets
+        uses: ./.github/actions/tauri-package
+        with:
+          platform: windows
+          arch: arm64
+          windows_file_name: stfc-mod-new-launcher-${{ github.event.release.tag_name }}-windows-arm64.msi
+          release_tag: ${{ github.event.release.tag_name }}
+
+      - name: Upload Windows ARM64 release assets
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          files: release-assets/stfc-mod-new-launcher-${{ github.event.release.tag_name }}-windows-arm64.msi

@@ -5,6 +5,14 @@ inputs:
   platform:
     description: Target platform to package for
     required: true
+  arch:
+    description: Target architecture to package for
+    required: false
+    default: x64
+  windows_file_name:
+    description: Optional explicit Windows MSI filename
+    required: false
+    default: ""
   release_tag:
     description: Release tag used in the packaged asset name
     required: true
@@ -47,5 +55,10 @@ runs:
         }
 
         foreach ($file in $files) {
-          Copy-Item $file.FullName -Destination $assetDir
+          $targetName = "${{ inputs.windows_file_name }}"
+          if ([string]::IsNullOrWhiteSpace($targetName)) {
+            $archSuffix = "${{ inputs.arch }}"
+            $targetName = "stfc-mod-new-launcher-${{ inputs.release_tag }}-windows-$archSuffix.msi"
+          }
+          Copy-Item $file.FullName -Destination (Join-Path $assetDir $targetName)
         }
