@@ -1,0 +1,19 @@
+{
+	"hooks": {
+		"PostToolUse": [
+			{
+				"matcher": "Edit|Write",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "FILE=$(python3 -c \"import os,json; print(json.loads(os.environ.get('CLAUDE_TOOL_INPUT','{}')).get('file_path',''))\"); case \"$FILE\" in *.rs) (cd src-tauri && cargo check 2>&1) ;; esac"
+					},
+					{
+						"type": "command",
+						"command": "FILE=$(python3 -c \"import os,json; print(json.loads(os.environ.get('CLAUDE_TOOL_INPUT','{}')).get('file_path',''))\"); case \"$FILE\" in *.ts|*.vue|*.json) pnpm biome check --write \"$FILE\" 2>&1 ;; esac"
+					}
+				]
+			}
+		]
+	}
+}
