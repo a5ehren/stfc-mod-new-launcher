@@ -3,6 +3,7 @@ use crate::models::Platform;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LauncherSettings {
     pub game_path: Option<String>,
@@ -29,6 +30,7 @@ impl GameLocator {
         })
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn from_launcher_settings_file(
         &self,
         settings_file: &Path,
@@ -55,10 +57,12 @@ impl GameLocator {
 }
 
 /// Parses launcher settings using macOS normalization for legacy callers and tests.
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn parse_launcher_settings(text: &str) -> LauncherResult<LauncherSettings> {
     parse_launcher_settings_for_platform(text, Platform::MacOs)
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn parse_launcher_settings_for_platform(
     text: &str,
     platform: Platform,
@@ -98,6 +102,7 @@ pub fn parse_launcher_settings_for_platform(
     })
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 fn normalize_xsolla_path(value: &str, platform: Platform) -> String {
     let value = value.trim();
     match platform {

@@ -1,5 +1,6 @@
 import { mount } from "@vue/test-utils";
 import { describe, expect, it, vi } from "vitest";
+import LcarsButton from "@/components/lcars/LcarsButton.vue";
 import { getLauncherStatus } from "@/lib/commands";
 import MainLauncher from "./MainLauncher.vue";
 
@@ -35,6 +36,9 @@ describe("MainLauncher", () => {
 	it("renders permanent and conditional actions", async () => {
 		const wrapper = mount(MainLauncher);
 		await new Promise((resolve) => setTimeout(resolve, 0));
+		const labels = wrapper
+			.findAllComponents(LcarsButton)
+			.map((button) => button.text());
 
 		expect(wrapper.text()).toContain("Launch Game");
 		expect(wrapper.text()).toContain("Open Raw Config");
@@ -43,6 +47,15 @@ describe("MainLauncher", () => {
 		expect(wrapper.text()).toContain("Update Game");
 		expect(wrapper.text()).toContain("Update Mod");
 		expect(wrapper.text()).toContain("Stable");
+		expect(wrapper.find(".lcars-shell").classes()).toContain("compact-header");
+		expect(wrapper.find(".data-cascade").exists()).toBe(false);
+		expect(wrapper.find(".launch-status").exists()).toBe(true);
+		expect(labels.slice(-4)).toEqual([
+			"Open Logs",
+			"Update Game",
+			"Update Mod",
+			"Launch Game",
+		]);
 	});
 
 	it("hides update actions when no updates are available", async () => {

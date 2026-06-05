@@ -1,6 +1,6 @@
 use crate::errors::{io_context, LauncherResult};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
 pub struct ConfigService {
@@ -10,10 +10,6 @@ pub struct ConfigService {
 impl ConfigService {
     pub fn new(config_file: PathBuf) -> Self {
         Self { config_file }
-    }
-
-    pub fn config_file(&self) -> &Path {
-        &self.config_file
     }
 
     pub fn read_config(&self) -> LauncherResult<String> {

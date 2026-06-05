@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import DataCascade from "@/components/lcars/DataCascade.vue";
 import LcarsButton from "@/components/lcars/LcarsButton.vue";
 import LcarsShell from "@/components/lcars/LcarsShell.vue";
 import StatusStrip from "@/components/StatusStrip.vue";
@@ -97,23 +96,48 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <LcarsShell>
-    <template #cascade>
-      <DataCascade />
-    </template>
-
+  <LcarsShell banner-text="STFC Community Mod" compact-header>
     <div class="main-grid">
-      <div class="actions">
-        <LcarsButton tone="orange" @click="launchGame">Launch Game</LcarsButton>
-        <LcarsButton v-if="status?.game.updateAvailable" tone="gold" @click="updateGame">Update Game</LcarsButton>
-        <LcarsButton v-if="status?.modStatus.updateAvailable" tone="blue" @click="updateMod">Update Mod</LcarsButton>
-        <LcarsButton tone="violet" @click="openRawConfig">Open Raw Config</LcarsButton>
-        <LcarsButton tone="tan" @click="openConfigEditor">Open Config Editor</LcarsButton>
-        <LcarsButton tone="red" @click="openLogs">Open Logs</LcarsButton>
+      <div class="footer-actions">
+        <div class="primary-row">
+          <div class="button-cell">
+            <LcarsButton tone="violet" edge="left" @click="openRawConfig">Open Raw Config</LcarsButton>
+          </div>
+          <div class="separator" aria-hidden="true"></div>
+          <div class="button-cell">
+            <LcarsButton tone="tan" edge="middle" @click="openConfigEditor">Open Config Editor</LcarsButton>
+          </div>
+          <div class="separator" aria-hidden="true"></div>
+          <div class="button-cell">
+            <LcarsButton tone="red" edge="middle" @click="openLogs">Open Logs</LcarsButton>
+          </div>
+          <div class="separator" aria-hidden="true"></div>
+          <div class="launch-cell">
+            <div v-if="status?.game.updateAvailable || status?.modStatus.updateAvailable" class="update-stack">
+              <LcarsButton
+                v-if="status?.game.updateAvailable"
+                tone="gold"
+                :edge="status?.modStatus.updateAvailable ? 'left' : 'single'"
+                @click="updateGame"
+              >
+                Update Game
+              </LcarsButton>
+              <LcarsButton
+                v-if="status?.modStatus.updateAvailable"
+                tone="blue"
+                :edge="status?.game.updateAvailable ? 'right' : 'single'"
+                @click="updateMod"
+              >
+                Update Mod
+              </LcarsButton>
+            </div>
+            <StatusStrip class="launch-status" :message="message" :warning="warning" />
+            <LcarsButton tone="orange" edge="right" @click="launchGame">Launch Game</LcarsButton>
+          </div>
+        </div>
       </div>
 
       <button class="channel-toggle" @click="toggleChannel">{{ channelLabel }}</button>
-      <StatusStrip :message="message" :warning="warning" />
     </div>
   </LcarsShell>
 </template>
@@ -122,28 +146,63 @@ onBeforeUnmount(() => {
 .main-grid {
   position: relative;
   height: 100%;
-  display: grid;
-  grid-template-rows: 1fr auto;
-}
-.actions {
   display: flex;
-  flex-wrap: wrap;
-  align-content: start;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+.footer-actions {
+  display: grid;
   gap: 12px;
-  max-width: 460px;
+  padding: 0 18px 8px 0;
+}
+.primary-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 4px minmax(0, 1fr) 4px minmax(0, 1fr) 4px minmax(0, 1fr);
+  align-items: end;
+}
+.button-cell {
+  min-width: 0;
+}
+.button-cell :deep(.lcars-button),
+.launch-cell :deep(.lcars-button) {
+  width: 100%;
+  min-width: 0;
+}
+.separator {
+  width: 4px;
+  align-self: stretch;
+  background: #000;
+}
+.launch-cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: flex-end;
+  gap: 8px;
+}
+.update-stack {
+  display: flex;
+  justify-content: flex-end;
+  width: fit-content;
+}
+.launch-status {
+  width: max-content;
+  justify-content: flex-end;
 }
 .channel-toggle {
   position: absolute;
   right: 18px;
   top: 4px;
   border: 0;
-  border-radius: 0 26px 26px 0;
+  border-radius: 9999px;
   background: var(--lcars-blue);
   color: #000;
-  height: 52px;
-  min-width: 130px;
-  padding: 0 18px 8px;
+  height: 38px;
+  min-width: 96px;
+  padding: 0 12px 6px;
   text-transform: uppercase;
+  font-size: 14px;
   font-weight: 700;
   display: flex;
   align-items: flex-end;

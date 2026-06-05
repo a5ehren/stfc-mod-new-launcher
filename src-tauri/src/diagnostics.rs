@@ -35,6 +35,7 @@ impl DiagnosticsService {
         &self.logs_dir
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn log_file(&self) -> &Path {
         &self.log_file
     }

@@ -1,5 +1,18 @@
+<script setup lang="ts">
+withDefaults(
+	defineProps<{
+		bannerText?: string;
+		compactHeader?: boolean;
+	}>(),
+	{
+		bannerText: "LCARS ACCESS 333",
+		compactHeader: false,
+	},
+);
+</script>
+
 <template>
-  <section class="lcars-shell">
+  <section class="lcars-shell" :class="{ 'compact-header': compactHeader }">
     <aside class="left-frame">
       <div class="panel panel-top">LCARS</div>
       <div class="panel panel-fill">02-262000</div>
@@ -7,7 +20,7 @@
     </aside>
     <main class="content-frame">
       <header class="top-frame">
-        <div class="banner">LCARS ACCESS 333</div>
+        <div class="banner">{{ bannerText }}</div>
         <slot name="cascade" />
       </header>
       <div class="bar-panel">
@@ -49,7 +62,7 @@
 }
 .panel-top {
   background: var(--lcars-blue);
-  border-radius: 0 0 0 var(--lcars-radius);
+  border-radius: var(--lcars-radius) 0 0 0;
 }
 .panel-fill {
   background: var(--lcars-red);
@@ -58,16 +71,23 @@
 }
 .panel-bottom {
   background: var(--lcars-orange);
-  border-radius: var(--lcars-radius) 0 0 0;
+  border-radius: 0 0 0 var(--lcars-radius);
 }
 .content-frame {
   display: grid;
   grid-template-rows: 156px 24px 1fr;
   min-width: 0;
+  min-height: 0;
+}
+.compact-header .content-frame {
+  grid-template-rows: 66px 24px 1fr;
 }
 .top-frame {
   display: grid;
   align-items: end;
+}
+.compact-header .top-frame {
+  align-items: start;
 }
 .banner {
   color: var(--lcars-orange);
@@ -86,8 +106,13 @@
 .violet { background: var(--lcars-violet); }
 .red { background: var(--lcars-red); }
 .content {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   min-height: 0;
   padding: 22px 0 0 22px;
+}
+.compact-header .content {
+  padding-top: 8px;
 }
 </style>
