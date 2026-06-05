@@ -29,8 +29,11 @@ pnpm tauri dev
 # Run tests
 pnpm test
 
-# Build for production
-pnpm tauri build
+# Build the macOS universal app bundle
+pnpm build:macos
+
+# Build the Windows MSI installer
+pnpm build:windows
 ```
 
 ## Project Structure
@@ -47,6 +50,8 @@ src/components/     # LCARS UI components, config components
 
 - `pnpm dev` - Start Vite dev server
 - `pnpm build` - Build frontend
+- `pnpm build:macos` - Build the macOS universal Tauri bundle
+- `pnpm build:windows` - Build the Windows MSI installer
 - `pnpm test` - Run Vitest tests
 - `pnpm tauri dev` - Run Tauri in dev mode
 - `pnpm tauri build` - Build Tauri app

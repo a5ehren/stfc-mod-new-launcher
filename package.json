@@ -6,6 +6,8 @@
 	"scripts": {
 		"dev": "vite",
 		"build": "vue-tsc --noEmit && vite build",
+		"build:macos": "pnpm tauri build --bundles app --target universal-apple-darwin",
+		"build:windows": "pnpm exec tauri build --bundles msi --ci",
 		"preview": "vite preview",
 		"test": "vitest run",
 		"test:watch": "vitest",

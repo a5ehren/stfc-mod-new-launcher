@@ -1,0 +1,51 @@
+name: Tauri Package
+description: Shared release packaging for Tauri macOS and Windows bundles
+
+inputs:
+  platform:
+    description: Target platform to package for
+    required: true
+  release_tag:
+    description: Release tag used in the packaged asset name
+    required: true
+  asset_dir:
+    description: Directory where packaged assets should be written
+    required: false
+    default: release-assets
+
+runs:
+  using: composite
+  steps:
+    - name: Package macOS release asset
+      if: inputs.platform == 'macos'
+      shell: bash
+      run: |
+        set -euo pipefail
+        bundle_dir="$(find src-tauri/target -type d -name '*.app' -path '*/bundle/*' | head -n 1)"
+        if [ -z "$bundle_dir" ]; then
+          echo "No macOS .app bundle found"
+          exit 1
+        fi
+        mkdir -p "${{ inputs.asset_dir }}"
+        asset_name="stfc-mod-new-launcher-${{ inputs.release_tag }}-macos-universal.tar.gz"
+        tar -czf "${{ inputs.asset_dir }}/$asset_name" -C "$(dirname "$bundle_dir")" "$(basename "$bundle_dir")"
+
+    - name: Package Windows release asset
+      if: inputs.platform == 'windows'
+      shell: pwsh
+      run: |
+        $assetDir = Join-Path $env:GITHUB_WORKSPACE "${{ inputs.asset_dir }}"
+        New-Item -ItemType Directory -Force -Path $assetDir | Out-Null
+
+        $bundleRoot = Join-Path $env:GITHUB_WORKSPACE "src-tauri\target"
+        $files = Get-ChildItem -Path $bundleRoot -Recurse -File -Include *.msi |
+          Where-Object { $_.FullName -match '\\bundle\\' }
+
+        if (-not $files) {
+          Write-Error "No Windows installer bundle found"
+          exit 1
+        }
+
+        foreach ($file in $files) {
+          Copy-Item $file.FullName -Destination $assetDir
+        }

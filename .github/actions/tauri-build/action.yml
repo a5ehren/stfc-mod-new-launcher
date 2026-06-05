@@ -1,0 +1,57 @@
+name: Tauri Build
+description: Shared pnpm, Node, Rust, cache, install, and build steps for Tauri bundles
+
+inputs:
+  build_command:
+    description: Command to run after dependencies are installed
+    required: true
+  rust_targets:
+    description: Optional comma-separated Rust targets to install
+    required: false
+    default: ""
+  pnpm_version:
+    description: pnpm version to install
+    required: false
+    default: "11.5.1"
+
+runs:
+  using: composite
+  steps:
+    - name: Setup pnpm
+      uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093
+      with:
+        version: ${{ inputs.pnpm_version }}
+
+    - name: Setup Node
+      uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+      with:
+        node-version: lts/*
+        cache: pnpm
+        cache-dependency-path: pnpm-lock.yaml
+
+    - name: Install Rust stable with targets
+      if: inputs.rust_targets != ''
+      uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8
+      with:
+        targets: ${{ inputs.rust_targets }}
+
+    - name: Install Rust stable
+      if: inputs.rust_targets == ''
+      uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8
+
+    - name: Cargo cache
+      uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          src-tauri/target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+
+    - name: Install dependencies
+      shell: bash
+      run: pnpm install --frozen-lockfile
+
+    - name: Build bundle
+      shell: bash
+      run: ${{ inputs.build_command }}

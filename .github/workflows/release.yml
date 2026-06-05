@@ -1,0 +1,72 @@
+name: Release
+
+on:
+  release:
+    types:
+      - published
+
+concurrency:
+  group: release-${{ github.event.release.tag_name }}
+  cancel-in-progress: true
+
+jobs:
+  build-macos:
+    name: Build macOS bundle
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          persist-credentials: false
+
+      - name: Build macOS universal bundle
+        uses: ./.github/actions/tauri-build
+        with:
+          rust_targets: aarch64-apple-darwin,x86_64-apple-darwin
+          build_command: pnpm build:macos
+
+      - name: Package macOS release asset
+        uses: ./.github/actions/tauri-package
+        with:
+          platform: macos
+          release_tag: ${{ github.event.release.tag_name }}
+
+      - name: Upload macOS release asset
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          files: release-assets/*.tar.gz
+
+  build-windows:
+    name: Build Windows bundle
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          persist-credentials: false
+
+      - name: Build Windows bundle
+        uses: ./.github/actions/tauri-build
+        with:
+          build_command: pnpm build:windows
+
+      - name: Package Windows release assets
+        uses: ./.github/actions/tauri-package
+        with:
+          platform: windows
+          release_tag: ${{ github.event.release.tag_name }}
+
+      - name: Upload Windows release assets
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          files: release-assets/*
