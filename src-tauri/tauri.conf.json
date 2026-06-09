@@ -44,6 +44,14 @@
 		"createUpdaterArtifacts": false,
 		"macOS": {
 			"signingIdentity": "-"
+		},
+		"linux": {
+			"deb": {
+				"files": {}
+			},
+			"appimage": {
+				"files": {}
+			}
 		}
 	}
 }

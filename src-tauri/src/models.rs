@@ -6,6 +6,7 @@ use std::path::PathBuf;
 pub enum Platform {
     MacOs,
     Windows,
+    LinuxWine,
 }
 
 pub fn current_platform() -> Platform {
@@ -19,7 +20,7 @@ pub fn current_platform() -> Platform {
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
-        panic!("unsupported platform")
+        Platform::LinuxWine
     }
 }
 

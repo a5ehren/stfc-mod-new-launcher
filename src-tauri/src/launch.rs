@@ -12,6 +12,30 @@ pub struct LaunchPlan {
     pub working_dir: Option<PathBuf>,
 }
 
+/// Finds prime.exe under drive_c in a WINE prefix
+fn find_prime_exe_in_wine_prefix(wine_prefix: &Path) -> Option<PathBuf> {
+    let drive_c = wine_prefix.join("drive_c");
+    if !drive_c.is_dir() {
+        return None;
+    }
+    fn walk_for_prime_exe(dir: &Path) -> Option<PathBuf> {
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    if let Some(found) = walk_for_prime_exe(&path) {
+                        return Some(found);
+                    }
+                } else if path.file_name().map(|n| n == "prime.exe").unwrap_or(false) {
+                    return Some(path);
+                }
+            }
+        }
+        None
+    }
+    walk_for_prime_exe(&drive_c)
+}
+
 pub fn build_launch_plan(
     platform: Platform,
     game_root: &Path,
@@ -65,6 +89,37 @@ pub fn build_launch_plan(
             args: Vec::new(),
             environment: BTreeMap::new(),
             working_dir: Some(game_root.to_path_buf()),
+        }),
+        (Platform::LinuxWine, LaunchMode::Managed) => {
+            // Find prime.exe in the WINE prefix
+            let prime_exe = find_prime_exe_in_wine_prefix(game_root)
+                .ok_or_else(|| LauncherError::InvalidData {
+                    context: "building launch plan".into(),
+                    message: "prime.exe not found in WINE prefix".into(),
+                })?;
+
+            // Determine wine command (could be wine, wine64, proton, etc.)
+            let wine_cmd = std::env::var("STFC_WINE_CMD").unwrap_or_else(|_| "wine".to_string());
+
+            let mut environment = BTreeMap::new();
+            // Use WINEDLLOVERRIDES to inject our version.dll
+            environment.insert(
+                "WINEDLLOVERRIDES".into(),
+                format!("version=n,b;{}", mod_library.to_string_lossy()),
+            );
+            // Set WINEPREFIX
+            environment.insert("WINEPREFIX".into(), game_root.to_string_lossy().to_string());
+
+            Ok(LaunchPlan {
+                executable: wine_cmd,
+                args: vec![prime_exe.to_string_lossy().to_string()],
+                environment,
+                working_dir: prime_exe.parent().map(Path::to_path_buf),
+            })
+        }
+        (Platform::LinuxWine, LaunchMode::WindowsProxyDll) => Err(LauncherError::InvalidData {
+            context: "building launch plan".into(),
+            message: "Windows proxy DLL mode is not valid on Linux/WINE".into(),
         }),
         (Platform::MacOs, LaunchMode::WindowsProxyDll) => Err(LauncherError::InvalidData {
             context: "building launch plan".into(),
@@ -127,5 +182,69 @@ mod tests {
 
         assert!(plan.executable.ends_with("prime.exe"));
         assert!(plan.environment.is_empty());
+    }
+
+    #[test]
+    fn linux_wine_launch_plan_uses_wine_with_dll_override() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let game_root = root.path();
+        std::fs::create_dir_all(game_root.join("drive_c/Program Files/STFC")).expect("wine dirs");
+        std::fs::write(
+            game_root.join("drive_c/Program Files/STFC/prime.exe"),
+            "",
+        )
+        .expect("prime exe");
+
+        let plan = build_launch_plan(
+            crate::models::Platform::LinuxWine,
+            game_root,
+            std::path::Path::new("/mods/version.dll"),
+            crate::models::LaunchMode::Managed,
+        )
+        .expect("launch plan");
+
+        assert_eq!(plan.executable, "wine");
+        assert_eq!(plan.args.len(), 1);
+        assert!(plan.args[0].ends_with("drive_c/Program Files/STFC/prime.exe"));
+        assert_eq!(
+            plan.environment.get("WINEDLLOVERRIDES").map(String::as_str),
+            Some("version=n,b;/mods/version.dll")
+        );
+        assert_eq!(
+            plan.environment.get("WINEPREFIX").map(String::as_str),
+            Some(game_root.to_string_lossy().as_ref())
+        );
+    }
+
+    #[test]
+    fn linux_wine_rejects_windows_proxy_dll_mode() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let game_root = root.path();
+
+        let result = build_launch_plan(
+            crate::models::Platform::LinuxWine,
+            game_root,
+            std::path::Path::new("/mods/version.dll"),
+            crate::models::LaunchMode::WindowsProxyDll,
+        );
+
+        assert!(matches!(result, Err(LauncherError::InvalidData { .. })));
+    }
+
+    #[test]
+    fn linux_wine_errors_when_prime_exe_not_found() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let game_root = root.path();
+        std::fs::create_dir_all(game_root.join("drive_c/Program Files/STFC")).expect("wine dirs");
+        // No prime.exe
+
+        let result = build_launch_plan(
+            crate::models::Platform::LinuxWine,
+            game_root,
+            std::path::Path::new("/mods/version.dll"),
+            crate::models::LaunchMode::Managed,
+        );
+
+        assert!(matches!(result, Err(LauncherError::InvalidData { .. })));
     }
 }

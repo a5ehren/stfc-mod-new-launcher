@@ -29,6 +29,7 @@ fn expected_archive_name(platform: Platform) -> &'static str {
     match platform {
         Platform::Windows => "stfc-community-mod-windows-x64.tar.zst",
         Platform::MacOs => "stfc-community-mod-macos-universal.tar.zst",
+        Platform::LinuxWine => "stfc-community-mod-windows-x64.tar.zst", // WINE uses Windows binaries
     }
 }
 

@@ -29,6 +29,7 @@ pub fn xsolla_update_url(installed_version: u32, platform: Platform) -> String {
     let platform = match platform {
         Platform::MacOs => "mac_os",
         Platform::Windows => "windows",
+        Platform::LinuxWine => "windows", // WINE uses Windows binaries
     };
     format!(
         "https://gus.xsolla.com/updates?version={installed_version}&project_id=152033&region=&platform={platform}"
@@ -410,6 +411,10 @@ mod tests {
         );
         assert_eq!(
             xsolla_update_url(168, Platform::Windows),
+            "https://gus.xsolla.com/updates?version=168&project_id=152033&region=&platform=windows"
+        );
+        assert_eq!(
+            xsolla_update_url(168, Platform::LinuxWine),
             "https://gus.xsolla.com/updates?version=168&project_id=152033&region=&platform=windows"
         );
     }
