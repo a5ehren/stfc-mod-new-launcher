@@ -1,5 +1,5 @@
 name: Tauri Package
-description: Shared release packaging for Tauri macOS and Windows bundles
+description: Shared release packaging for Tauri macOS, Windows, and Linux bundles
 
 inputs:
   platform:
@@ -62,3 +62,26 @@ runs:
           }
           Copy-Item $file.FullName -Destination (Join-Path $assetDir $targetName)
         }
+
+    - name: Package Linux release assets
+      if: inputs.platform == 'linux'
+      shell: bash
+      run: |
+        set -euo pipefail
+        asset_dir="${{ inputs.asset_dir }}"
+        mkdir -p "$asset_dir"
+
+        deb_file="$(find src-tauri/target -type f -name '*.deb' -path '*/bundle/*' | head -n 1)"
+        appimage_file="$(find src-tauri/target -type f -name '*.AppImage' -path '*/bundle/*' | head -n 1)"
+
+        if [ -z "$deb_file" ] || [ -z "$appimage_file" ]; then
+          echo "Missing Linux bundle artifacts"
+          echo "deb: ${deb_file:-not found}"
+          echo "appimage: ${appimage_file:-not found}"
+          exit 1
+        fi
+
+        arch_suffix="${{ inputs.arch }}"
+        release_tag="${{ inputs.release_tag }}"
+        cp "$deb_file" "$asset_dir/stfc-mod-new-launcher-${release_tag}-linux-${arch_suffix}.deb"
+        cp "$appimage_file" "$asset_dir/stfc-mod-new-launcher-${release_tag}-linux-${arch_suffix}.AppImage"

@@ -73,35 +73,40 @@ jobs:
           tag_name: ${{ github.event.release.tag_name }}
           files: release-assets/stfc-mod-new-launcher-${{ github.event.release.tag_name }}-windows-x64.msi
 
-  # build-windows-arm64:
-  #   name: Build Windows ARM64 bundle
-  #   runs-on: windows-11-arm
-  #   permissions:
-  #     contents: write
-  #   steps:
-  #     - name: Checkout
-  #       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
-  #       with:
-  #         persist-credentials: false
+  build-linux:
+    name: Build Linux bundle
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: false
 
-  #     - name: Build Windows ARM64 bundle
-  #       uses: ./.github/actions/tauri-build
-  #       with:
-  #         rust_targets: aarch64-pc-windows-msvc
-  #         build_command: pnpm build:windows:arm64
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libfuse2
 
-  #     - name: Package Windows ARM64 release assets
-  #       uses: ./.github/actions/tauri-package
-  #       with:
-  #         platform: windows
-  #         arch: arm64
-  #         windows_file_name: stfc-mod-new-launcher-${{ github.event.release.tag_name }}-windows-arm64.msi
-  #         release_tag: ${{ github.event.release.tag_name }}
+      - name: Build Linux bundle
+        uses: ./.github/actions/tauri-build
+        with:
+          build_command: pnpm build:linux
 
-  #     - name: Upload Windows ARM64 release assets
-  #       uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda
-  #       env:
-  #         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  #       with:
-  #         tag_name: ${{ github.event.release.tag_name }}
-  #         files: release-assets/stfc-mod-new-launcher-${{ github.event.release.tag_name }}-windows-arm64.msi
+      - name: Package Linux release assets
+        uses: ./.github/actions/tauri-package
+        with:
+          platform: linux
+          arch: x64
+          release_tag: ${{ github.event.release.tag_name }}
+
+      - name: Upload Linux release assets
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          files: |
+            release-assets/stfc-mod-new-launcher-${{ github.event.release.tag_name }}-linux-x64.deb
+            release-assets/stfc-mod-new-launcher-${{ github.event.release.tag_name }}-linux-x64.AppImage
