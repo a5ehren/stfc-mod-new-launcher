@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
+rust-version = "1.95"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -39,4 +40,3 @@ directories = "6.0.0"
 sevenz-rust2 = "0.21.0"
 librsync = "0.2.5"
 tauri-plugin-fs = "2"
-
