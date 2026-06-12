@@ -39,7 +39,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ github.event.release.tag_name }}
-          files: release-assets/*.tar.gz
+          files: release-assets/*.dmg
 
   build-windows:
     name: Build Windows bundle
