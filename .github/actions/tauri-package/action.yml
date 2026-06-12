@@ -29,14 +29,14 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        bundle_dir="$(find src-tauri/target -type d -name '*.app' -path '*/bundle/*' | head -n 1)"
-        if [ -z "$bundle_dir" ]; then
-          echo "No macOS .app bundle found"
+        dmg_file="$(find src-tauri/target -type f -name '*.dmg' -path '*/bundle/*' | head -n 1)"
+        if [ -z "$dmg_file" ]; then
+          echo "No macOS .dmg bundle found"
           exit 1
         fi
         mkdir -p "${{ inputs.asset_dir }}"
-        asset_name="stfc-mod-new-launcher-${{ inputs.release_tag }}-macos-universal.tar.gz"
-        tar -czf "${{ inputs.asset_dir }}/$asset_name" -C "$(dirname "$bundle_dir")" "$(basename "$bundle_dir")"
+        asset_name="stfc-mod-new-launcher-${{ inputs.release_tag }}-macos-universal.dmg"
+        cp "$dmg_file" "${{ inputs.asset_dir }}/$asset_name"
 
     - name: Package Windows release asset
       if: inputs.platform == 'windows'
