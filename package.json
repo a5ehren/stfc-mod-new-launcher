@@ -27,12 +27,12 @@
 		"@tauri-apps/plugin-process": "^2.3.1",
 		"@tauri-apps/plugin-updater": "^2.10.1",
 		"toml": "^4.1.1",
-		"vue": "^3.5.35"
+		"vue": "^3.5.38"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.4.16",
 		"@tauri-apps/cli": "^2.11.2",
-		"@types/node": "^24.13.1",
+		"@types/node": "^24.13.2",
 		"@vitejs/plugin-vue": "^6.0.7",
 		"@vue/test-utils": "^2.4.11",
 		"git-format-staged": "^4.0.1",
