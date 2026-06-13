@@ -216,15 +216,15 @@ pub fn is_valid_game_root(path: &Path, platform: Platform) -> bool {
             // - Lutris: <prefix>/drive_c/Games/STFC/prime.exe or similar
             // - Bottles: <prefix>/drive_c/Program Files/STFC/prime.exe
             // We check for prime.exe anywhere under drive_c
-            has_prime_exe_under_drive_c(path)
+            find_prime_exe_in_wine_prefix(path).is_some()
         }
     }
 }
 
-fn has_prime_exe_under_drive_c(path: &Path) -> bool {
-    let drive_c = path.join("drive_c");
+pub fn find_prime_exe_in_wine_prefix(wine_prefix: &Path) -> Option<PathBuf> {
+    let drive_c = wine_prefix.join("drive_c");
     if !drive_c.is_dir() {
-        return false;
+        return None;
     }
 
     let mut pending = vec![drive_c];
@@ -239,12 +239,12 @@ fn has_prime_exe_under_drive_c(path: &Path) -> bool {
                     .map(|name| name == "prime.exe")
                     .unwrap_or(false)
                 {
-                    return true;
+                    return Some(path);
                 }
             }
         }
     }
-    false
+    None
 }
 
 pub fn installed_version(game_root: &Path) -> Option<u32> {
