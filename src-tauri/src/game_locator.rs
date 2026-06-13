@@ -226,23 +226,25 @@ fn has_prime_exe_under_drive_c(path: &Path) -> bool {
     if !drive_c.is_dir() {
         return false;
     }
-    // Walk drive_c to find prime.exe
-    fn walk_for_prime_exe(dir: &Path) -> bool {
+
+    let mut pending = vec![drive_c];
+    while let Some(dir) = pending.pop() {
         if let Ok(entries) = std::fs::read_dir(dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
                 if path.is_dir() {
-                    if walk_for_prime_exe(&path) {
-                        return true;
-                    }
-                } else if path.file_name().map(|n| n == "prime.exe").unwrap_or(false) {
+                    pending.push(path);
+                } else if path
+                    .file_name()
+                    .map(|name| name == "prime.exe")
+                    .unwrap_or(false)
+                {
                     return true;
                 }
             }
         }
-        false
     }
-    walk_for_prime_exe(&drive_c)
+    false
 }
 
 pub fn installed_version(game_root: &Path) -> Option<u32> {
@@ -587,6 +589,23 @@ mod tests {
         std::fs::write(game_root.join(".version"), "&game=168").expect("version");
         std::fs::create_dir_all(game_root.join("drive_c/Games/STFC")).expect("lutris dirs");
         std::fs::write(game_root.join("drive_c/Games/STFC/prime.exe"), "").expect("prime exe");
+
+        assert!(is_valid_game_root(
+            game_root,
+            crate::models::Platform::LinuxWine
+        ));
+    }
+
+    #[test]
+    fn validates_linux_wine_game_root_with_deep_prime_exe() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let game_root = root.path();
+        let mut nested = game_root.join("drive_c");
+        for segment in 0..64 {
+            nested = nested.join(format!("level-{segment}"));
+        }
+        std::fs::create_dir_all(&nested).expect("deep wine dirs");
+        std::fs::write(nested.join("prime.exe"), "").expect("prime exe");
 
         assert!(is_valid_game_root(
             game_root,

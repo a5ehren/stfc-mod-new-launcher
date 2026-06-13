@@ -4,8 +4,8 @@ use serde::Deserialize;
 use std::env;
 
 const STFC_MOD_RELEASES_URL: &str = "https://api.github.com/repos/netniV/stfc-mod/releases";
-const STFC_MOD_RELEASES_PAGE_URL: &str = "https://github.com/netniV/stfc-mod/releases";
 const GITHUB_API_VERSION: &str = "2022-11-28";
+// Prefer the launcher-specific token when both are present.
 const GITHUB_TOKEN_ENV_VARS: &[&str] = &["STFC_GITHUB_TOKEN", "GITHUB_TOKEN"];
 
 #[derive(Debug, Clone, Deserialize)]
@@ -74,18 +74,7 @@ pub fn select_release_asset(
 }
 
 pub async fn fetch_releases(client: &reqwest::Client) -> LauncherResult<Vec<GitHubRelease>> {
-    match fetch_releases_from(client, STFC_MOD_RELEASES_URL).await {
-        Ok(releases) => Ok(releases),
-        Err(api_error) => match fetch_releases_from_html(client).await {
-            Ok(releases) => Ok(releases),
-            Err(html_error) => Err(LauncherError::Operation {
-                context: "fetching STFC mod releases".into(),
-                message: format!(
-                    "{api_error}; fallback GitHub page fetch also failed: {html_error}"
-                ),
-            }),
-        },
-    }
+    fetch_releases_from(client, STFC_MOD_RELEASES_URL).await
 }
 
 async fn fetch_releases_from(
@@ -161,81 +150,6 @@ async fn fetch_releases_from_with_token(
             context: "parsing STFC mod releases response".into(),
             source,
         })
-}
-
-async fn fetch_releases_from_html(client: &reqwest::Client) -> LauncherResult<Vec<GitHubRelease>> {
-    let response = client
-        .get(STFC_MOD_RELEASES_PAGE_URL)
-        .header(reqwest::header::USER_AGENT, "stfc-mod-launcher")
-        .send()
-        .await
-        .map_err(|source| LauncherError::Network {
-            context: "fetching STFC mod releases page".into(),
-            source,
-        })?
-        .error_for_status()
-        .map_err(|source| LauncherError::Network {
-            context: "checking STFC mod releases page response".into(),
-            source,
-        })?;
-
-    let html = response
-        .text()
-        .await
-        .map_err(|source| LauncherError::Network {
-            context: "reading STFC mod releases page".into(),
-            source,
-        })?;
-    Ok(parse_releases_from_html(&html))
-}
-
-fn parse_releases_from_html(html: &str) -> Vec<GitHubRelease> {
-    let mut releases = Vec::new();
-    let mut search_from = 0;
-    let marker = r#"href="/netniV/stfc-mod/releases/tag/"#;
-
-    while let Some(relative_index) = html[search_from..].find(marker) {
-        let href_start = search_from + relative_index + marker.len();
-        let Some(href_end_offset) = html[href_start..].find('"') else {
-            break;
-        };
-        let href_end = href_start + href_end_offset;
-        let tag_name = html[href_start..href_end].to_string();
-        let next_entry = html[href_end..]
-            .find(marker)
-            .map(|offset| href_end + offset)
-            .unwrap_or(html.len());
-        let prerelease = html[href_end..next_entry].contains("Pre-release");
-
-        releases.push(GitHubRelease {
-            tag_name,
-            prerelease,
-            assets: release_assets_from_tag(&html[href_start..href_end]),
-        });
-        search_from = href_end;
-    }
-
-    releases
-}
-
-fn release_assets_from_tag(tag_name: &str) -> Vec<GitHubAsset> {
-    let mut assets = Vec::new();
-    for platform in [Platform::Windows, Platform::MacOs] {
-        let archive_name = expected_archive_name(platform);
-        let archive_url = format!(
-            "https://github.com/netniV/stfc-mod/releases/download/{tag_name}/{archive_name}"
-        );
-        let checksum_url = format!("{archive_url}.sha256");
-        assets.push(GitHubAsset {
-            name: archive_name.to_string(),
-            browser_download_url: archive_url,
-        });
-        assets.push(GitHubAsset {
-            name: format!("{archive_name}.sha256"),
-            browser_download_url: checksum_url,
-        });
-    }
-    assets
 }
 
 fn github_token() -> Option<String> {

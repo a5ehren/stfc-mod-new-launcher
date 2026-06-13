@@ -605,9 +605,8 @@ async fn resolve_game_path(
         return Ok(path);
     }
 
-    let home_dir = std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("USERPROFILE").map(PathBuf::from))
+    let home_dir = directories::BaseDirs::new()
+        .map(|base_dirs| base_dirs.home_dir().to_path_buf())
         .ok_or_else(|| ErrorDto {
             kind: "gamePath".into(),
             message: "game path is not known".into(),
