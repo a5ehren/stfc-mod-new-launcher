@@ -67,24 +67,12 @@ pub fn set_game_path(
         .validate_manual_root(game_path)
         .map_err(ErrorDto::from)?;
 
-    {
-        let mut persisted = state.persisted.lock().map_err(|_| ErrorDto {
-            kind: "state".into(),
-            message: "launcher state lock is poisoned".into(),
-        })?;
-        let mut updated = persisted.clone();
-        updated.game_path = Some(validated.clone());
-        crate::storage::save_state(&state.paths, &updated).map_err(ErrorDto::from)?;
-        *persisted = updated;
-    }
+    persist_game_path(&state, &validated)?;
 
-    let mut status = state.status.lock().map_err(|_| ErrorDto {
+    let status = state.status.lock().map_err(|_| ErrorDto {
         kind: "state".into(),
         message: "launcher status lock is poisoned".into(),
     })?;
-    status.game.known = true;
-    status.game.path = Some(validated.to_string_lossy().to_string());
-    status.game.installed_version = crate::game_locator::installed_version(&validated);
     Ok(status.clone())
 }
 
@@ -197,7 +185,10 @@ pub async fn launch_game(app: tauri::AppHandle, state: State<'_, AppState>) -> C
         })?;
         persisted.launch_mode
     };
-    let game_path = resolve_game_path(&state, platform).await?;
+    let ResolvedGame {
+        root: game_path,
+        prime_exe,
+    } = resolve_game_path(&state, platform).await?;
     let mod_library = state
         .paths
         .mods_dir
@@ -208,8 +199,14 @@ pub async fn launch_game(app: tauri::AppHandle, state: State<'_, AppState>) -> C
         })
         .await?;
     }
-    let plan = crate::launch::build_launch_plan(platform, &game_path, &mod_library, launch_mode)
-        .map_err(ErrorDto::from)?;
+    let plan = crate::launch::build_launch_plan(
+        platform,
+        &game_path,
+        &mod_library,
+        launch_mode,
+        prime_exe.as_deref(),
+    )
+    .map_err(ErrorDto::from)?;
     state
         .diagnostics
         .info("launch", &format!("launching with mode {:?}", launch_mode))
@@ -333,10 +330,12 @@ pub async fn open_config_editor(app: tauri::AppHandle) -> CommandResult<()> {
 }
 
 #[tauri::command]
-pub async fn update_game(app: tauri::AppHandle, state: State<'_, AppState>) -> CommandResult<()> {
+pub async fn update_game(app: tauri::AppHandle, state: State<'_, AppState>) -> CommandResult<bool> {
     let diagnostics = state.diagnostics.clone();
     let staging_dir = state.paths.staging_dir.clone();
-    let game_path = resolve_game_path(&state, crate::models::current_platform()).await?;
+    let game_path = resolve_game_path(&state, crate::models::current_platform())
+        .await?
+        .root;
     let platform = crate::models::current_platform();
     let installed_version = crate::game_locator::installed_version(&game_path).unwrap_or(0);
     let client = reqwest::Client::new();
@@ -375,7 +374,7 @@ pub async fn update_game(app: tauri::AppHandle, state: State<'_, AppState>) -> C
                 "game is already at the latest known version",
             ),
         );
-        return Ok(());
+        return Ok(false);
     };
 
     let context = crate::game_updater::GameUpdateContext {
@@ -396,7 +395,7 @@ pub async fn update_game(app: tauri::AppHandle, state: State<'_, AppState>) -> C
             &format!("completed update plan to version {:?}", plan.target_version),
         )
         .map_err(ErrorDto::from)?;
-    Ok(())
+    Ok(true)
 }
 
 #[tauri::command]
@@ -590,10 +589,17 @@ where
     })
 }
 
+/// A validated game install: its root plus, for WINE prefixes, the `prime.exe`
+/// located while validating so launch plan building need not re-scan the prefix.
+struct ResolvedGame {
+    root: PathBuf,
+    prime_exe: Option<PathBuf>,
+}
+
 async fn resolve_game_path(
     state: &State<'_, AppState>,
     platform: crate::models::Platform,
-) -> CommandResult<PathBuf> {
+) -> CommandResult<ResolvedGame> {
     let persisted_path = {
         let persisted = state.persisted.lock().map_err(|_| ErrorDto {
             kind: "state".into(),
@@ -602,7 +608,29 @@ async fn resolve_game_path(
         persisted.game_path.clone()
     };
     if let Some(path) = persisted_path {
-        return Ok(path);
+        // Re-validate: the persisted path may now be stale (game moved or
+        // uninstalled). For WINE this walk also yields prime.exe, which we carry
+        // forward so build_launch_plan does not have to scan the prefix again.
+        match platform {
+            crate::models::Platform::LinuxWine => {
+                if let Some(prime_exe) = crate::game_locator::find_prime_exe_in_wine_prefix(&path) {
+                    return Ok(ResolvedGame {
+                        root: path,
+                        prime_exe: Some(prime_exe),
+                    });
+                }
+            }
+            _ => {
+                if crate::game_locator::is_valid_game_root(&path, platform) {
+                    return Ok(ResolvedGame {
+                        root: path,
+                        prime_exe: None,
+                    });
+                }
+            }
+        }
+        // Stale persisted path; fall through to re-discovery rather than running
+        // an update/launch against a directory that is no longer a valid install.
     }
 
     let home_dir = directories::BaseDirs::new()
@@ -621,7 +649,10 @@ async fn resolve_game_path(
     };
 
     persist_game_path(state, &path)?;
-    Ok(path)
+    Ok(ResolvedGame {
+        root: path,
+        prime_exe: None,
+    })
 }
 
 fn persist_game_path(state: &State<'_, AppState>, path: &std::path::Path) -> CommandResult<()> {

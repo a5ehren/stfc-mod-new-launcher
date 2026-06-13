@@ -24,6 +24,7 @@ pub fn build_launch_plan(
     game_root: &Path,
     mod_library: &Path,
     launch_mode: LaunchMode,
+    prime_exe: Option<&Path>,
 ) -> LauncherResult<LaunchPlan> {
     match (platform, launch_mode) {
         (Platform::MacOs, LaunchMode::Managed) => {
@@ -95,11 +96,17 @@ pub fn build_launch_plan(
             prelaunch_actions: Vec::new(),
         }),
         (Platform::LinuxWine, LaunchMode::Managed) => {
-            let prime_exe = crate::game_locator::find_prime_exe_in_wine_prefix(game_root)
-                .ok_or_else(|| LauncherError::InvalidData {
-                    context: "building launch plan".into(),
-                    message: "prime.exe not found in WINE prefix".into(),
-                })?;
+            // Reuse the executable located during path resolution when available;
+            // only re-scan the WINE prefix if the caller did not supply it.
+            let prime_exe = match prime_exe {
+                Some(prime_exe) => prime_exe.to_path_buf(),
+                None => crate::game_locator::find_prime_exe_in_wine_prefix(game_root).ok_or_else(
+                    || LauncherError::InvalidData {
+                        context: "building launch plan".into(),
+                        message: "prime.exe not found in WINE prefix".into(),
+                    },
+                )?,
+            };
             if !mod_library.is_file() {
                 return Err(LauncherError::InvalidData {
                     context: "building launch plan".into(),
@@ -208,6 +215,7 @@ mod tests {
             game_root,
             &mod_library,
             crate::models::LaunchMode::Managed,
+            None,
         )
         .expect("launch plan");
 
@@ -240,6 +248,7 @@ mod tests {
             root.path(),
             &mod_library,
             crate::models::LaunchMode::Managed,
+            None,
         );
 
         assert!(matches!(result, Err(LauncherError::InvalidData { .. })));
@@ -262,6 +271,7 @@ mod tests {
             game_root,
             &game_root.join("libstfc-community-mod.dylib"),
             crate::models::LaunchMode::Managed,
+            None,
         );
 
         assert!(matches!(result, Err(LauncherError::InvalidData { .. })));
@@ -274,6 +284,7 @@ mod tests {
             std::path::Path::new("C:/Games/STFC/game"),
             std::path::Path::new("C:/Games/STFC/game/version.dll"),
             crate::models::LaunchMode::WindowsProxyDll,
+            None,
         )
         .expect("launch plan");
 
@@ -297,6 +308,7 @@ mod tests {
             game_root,
             &mod_library,
             crate::models::LaunchMode::Managed,
+            None,
         )
         .expect("launch plan");
 
@@ -339,6 +351,34 @@ mod tests {
     }
 
     #[test]
+    fn linux_wine_launch_plan_reuses_provided_prime_exe() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let game_root = root.path();
+        // No prime.exe exists under drive_c, so a fallback walk would fail; the
+        // provided path must be used verbatim instead of re-scanning the prefix.
+        let prime_exe = game_root.join("drive_c/Program Files/STFC/prime.exe");
+        let mod_library = root.path().join("mods/version.dll");
+        std::fs::create_dir_all(mod_library.parent().expect("mod parent")).expect("mod dir");
+        std::fs::write(&mod_library, "mod").expect("mod library");
+
+        let plan = build_launch_plan(
+            crate::models::Platform::LinuxWine,
+            game_root,
+            &mod_library,
+            crate::models::LaunchMode::Managed,
+            Some(&prime_exe),
+        )
+        .expect("launch plan");
+
+        assert_eq!(plan.args, vec![prime_exe.to_string_lossy().to_string()]);
+        assert!(matches!(
+            &plan.prelaunch_actions[0],
+            PrelaunchAction::CopyFile { to, .. }
+                if to == &prime_exe.parent().expect("prime parent").join("version.dll")
+        ));
+    }
+
+    #[test]
     fn linux_wine_rejects_windows_proxy_dll_mode() {
         let root = tempfile::tempdir().expect("tempdir");
         let game_root = root.path();
@@ -348,6 +388,7 @@ mod tests {
             game_root,
             std::path::Path::new("/mods/version.dll"),
             crate::models::LaunchMode::WindowsProxyDll,
+            None,
         );
 
         assert!(matches!(result, Err(LauncherError::InvalidData { .. })));
@@ -365,6 +406,7 @@ mod tests {
             game_root,
             std::path::Path::new("/mods/version.dll"),
             crate::models::LaunchMode::Managed,
+            None,
         );
 
         assert!(matches!(result, Err(LauncherError::InvalidData { .. })));

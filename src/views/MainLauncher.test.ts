@@ -258,7 +258,7 @@ describe("MainLauncher", () => {
 				kind: "gamePath",
 				message: "game path is not known",
 			})
-			.mockResolvedValueOnce(undefined);
+			.mockResolvedValueOnce(true);
 		vi.mocked(open).mockResolvedValueOnce("/game");
 		vi.mocked(validateGamePath).mockResolvedValueOnce({
 			known: true,
