@@ -22,8 +22,8 @@ cd src-tauri && cargo test test_name          # single test by name
 # Run a single Vitest test file
 pnpm test -- src/lib/commands.test.ts
 
-# Lint/format (Biome)
-pnpm check               # check only
+# Lint/format (Biome + Rust)
+pnpm check               # check only (Biome + Rust fmt/clippy)
 pnpm lint                # check + write
 pnpm format              # format + write
 

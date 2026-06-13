@@ -150,8 +150,10 @@ mod tests {
     fn state_round_trips() {
         let root = tempfile::tempdir().expect("tempdir");
         let paths = ManagedPaths::from_root(root.path().to_path_buf());
-        let mut state = crate::models::PersistedState::default();
-        state.installed_mod_version = Some("v1.0.0".into());
+        let state = crate::models::PersistedState {
+            installed_mod_version: Some("v1.0.0".into()),
+            ..Default::default()
+        };
 
         save_state(&paths, &state).expect("save state");
         let loaded = load_state(&paths).expect("load state");
@@ -176,8 +178,10 @@ mod tests {
         paths.ensure_dirs().expect("dirs");
         let temp_file = paths.state_file.with_extension("json.tmp");
         std::fs::write(&temp_file, "stale").expect("write stale temp");
-        let mut state = crate::models::PersistedState::default();
-        state.installed_mod_version = Some("v2.0.0".into());
+        let state = crate::models::PersistedState {
+            installed_mod_version: Some("v2.0.0".into()),
+            ..Default::default()
+        };
 
         save_state(&paths, &state).expect("save state");
         let loaded = load_state(&paths).expect("load state");
@@ -190,10 +194,14 @@ mod tests {
     fn save_state_replaces_existing_state_file() {
         let root = tempfile::tempdir().expect("tempdir");
         let paths = ManagedPaths::from_root(root.path().to_path_buf());
-        let mut first = crate::models::PersistedState::default();
-        first.installed_mod_version = Some("v1.0.0".into());
-        let mut second = crate::models::PersistedState::default();
-        second.installed_mod_version = Some("v2.0.0".into());
+        let first = crate::models::PersistedState {
+            installed_mod_version: Some("v1.0.0".into()),
+            ..Default::default()
+        };
+        let second = crate::models::PersistedState {
+            installed_mod_version: Some("v2.0.0".into()),
+            ..Default::default()
+        };
 
         save_state(&paths, &first).expect("save first state");
         save_state(&paths, &second).expect("save second state");

@@ -31,7 +31,7 @@ impl GameLocator {
     }
 
     #[cfg_attr(not(test), allow(dead_code))]
-    pub fn from_launcher_settings_file(
+    pub fn read_launcher_settings_file(
         &self,
         settings_file: &Path,
     ) -> LauncherResult<Option<PathBuf>> {
@@ -54,6 +54,88 @@ impl GameLocator {
             .map(PathBuf::from)
             .filter(|path| is_valid_game_root(path, self.platform)))
     }
+}
+
+pub fn discover_game_root(platform: Platform, home_dir: &Path) -> LauncherResult<Option<PathBuf>> {
+    match platform {
+        Platform::MacOs => discover_macos_game_root(home_dir),
+        Platform::Windows => discover_windows_game_root(home_dir),
+        Platform::LinuxWine => Ok(None),
+    }
+}
+
+fn discover_macos_game_root(home_dir: &Path) -> LauncherResult<Option<PathBuf>> {
+    let locator = GameLocator::new(Platform::MacOs);
+    let settings_file =
+        home_dir.join("Library/Preferences/Star Trek Fleet Command/launcher_settings.ini");
+    if let Some(path) = locator.read_launcher_settings_file(&settings_file)? {
+        return Ok(Some(path));
+    }
+
+    let default_root = home_dir.join(
+        "Library/Application Support/Star Trek Fleet Command/Games/Star Trek Fleet Command/Star Trek Fleet Command/default/game",
+    );
+    if is_valid_game_root(&default_root, Platform::MacOs) {
+        return Ok(Some(default_root));
+    }
+
+    Ok(None)
+}
+
+fn discover_windows_game_root(home_dir: &Path) -> LauncherResult<Option<PathBuf>> {
+    let locator = GameLocator::new(Platform::Windows);
+    for settings_file in windows_launcher_settings_candidates(home_dir) {
+        if let Some(path) = locator.read_launcher_settings_file(&settings_file)? {
+            return Ok(Some(path));
+        }
+    }
+
+    for candidate in windows_default_game_roots(home_dir) {
+        if is_valid_game_root(&candidate, Platform::Windows) {
+            return Ok(Some(candidate));
+        }
+    }
+
+    Ok(None)
+}
+
+fn windows_launcher_settings_candidates(home_dir: &Path) -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    candidates.push(home_dir.join("AppData/Local/Star Trek Fleet Command/launcher_settings.ini"));
+    candidates.push(home_dir.join("AppData/Roaming/Star Trek Fleet Command/launcher_settings.ini"));
+
+    if let Some(local_app_data) = std::env::var_os("LOCALAPPDATA").map(PathBuf::from) {
+        candidates.push(local_app_data.join("Star Trek Fleet Command/launcher_settings.ini"));
+    }
+    if let Some(app_data) = std::env::var_os("APPDATA").map(PathBuf::from) {
+        candidates.push(app_data.join("Star Trek Fleet Command/launcher_settings.ini"));
+    }
+
+    candidates
+}
+
+fn windows_default_game_roots(home_dir: &Path) -> Vec<PathBuf> {
+    let mut candidates = vec![
+        home_dir.join("Games/Star Trek Fleet Command/Star Trek Fleet Command/default/game"),
+        home_dir.join(
+            "AppData/Local/Programs/Star Trek Fleet Command/Star Trek Fleet Command/default/game",
+        ),
+    ];
+
+    if let Some(system_drive) = std::env::var_os("SYSTEMDRIVE").map(PathBuf::from) {
+        candidates.push(
+            system_drive.join("Games/Star Trek Fleet Command/Star Trek Fleet Command/default/game"),
+        );
+        candidates
+            .push(system_drive.join(
+                "Program Files/Star Trek Fleet Command/Star Trek Fleet Command/default/game",
+            ));
+        candidates.push(system_drive.join(
+            "Program Files (x86)/Star Trek Fleet Command/Star Trek Fleet Command/default/game",
+        ));
+    }
+
+    candidates
 }
 
 /// Parses launcher settings using macOS normalization for legacy callers and tests.
@@ -303,7 +385,7 @@ mod tests {
         let root = tempfile::tempdir().expect("tempdir");
         let locator = GameLocator::new(crate::models::Platform::MacOs);
         let result = locator
-            .from_launcher_settings_file(&root.path().join("launcher_settings.ini"))
+            .read_launcher_settings_file(&root.path().join("launcher_settings.ini"))
             .expect("missing settings file");
 
         assert_eq!(result, None);
@@ -332,7 +414,7 @@ mod tests {
 
         let locator = GameLocator::new(crate::models::Platform::MacOs);
         let result = locator
-            .from_launcher_settings_file(&settings_file)
+            .read_launcher_settings_file(&settings_file)
             .expect("launcher settings");
 
         assert_eq!(result.as_deref(), Some(game_root.as_path()));
@@ -355,10 +437,98 @@ mod tests {
 
         let locator = GameLocator::new(crate::models::Platform::MacOs);
         let result = locator
-            .from_launcher_settings_file(&settings_file)
+            .read_launcher_settings_file(&settings_file)
             .expect("launcher settings");
 
         assert_eq!(result, None);
+    }
+
+    #[test]
+    fn discovers_macos_game_root_from_launcher_settings() {
+        let home = tempfile::tempdir().expect("tempdir");
+        let preferences = home
+            .path()
+            .join("Library/Preferences/Star Trek Fleet Command");
+        std::fs::create_dir_all(&preferences).expect("prefs dir");
+        let game_root = home.path().join(
+            "Library/Application Support/Star Trek Fleet Command/Games/Star Trek Fleet Command/Star Trek Fleet Command/default/game",
+        );
+        std::fs::create_dir_all(game_root.join("Star Trek Fleet Command.app/Contents/MacOS"))
+            .expect("game dirs");
+        std::fs::write(
+            game_root.join("Star Trek Fleet Command.app/Contents/MacOS/Star Trek Fleet Command"),
+            "",
+        )
+        .expect("game executable");
+        std::fs::write(
+            preferences.join("launcher_settings.ini"),
+            "[General]\n152033..GAME_PATH=//Users/test/ignored\n",
+        )
+        .expect("settings");
+
+        let discovered = discover_game_root(crate::models::Platform::MacOs, home.path())
+            .expect("discover game root");
+
+        assert_eq!(discovered.as_deref(), Some(game_root.as_path()));
+    }
+
+    #[test]
+    fn discovers_macos_default_game_root_without_settings() {
+        let home = tempfile::tempdir().expect("tempdir");
+        let game_root = home.path().join(
+            "Library/Application Support/Star Trek Fleet Command/Games/Star Trek Fleet Command/Star Trek Fleet Command/default/game",
+        );
+        std::fs::create_dir_all(game_root.join("Star Trek Fleet Command.app/Contents/MacOS"))
+            .expect("game dirs");
+        std::fs::write(
+            game_root.join("Star Trek Fleet Command.app/Contents/MacOS/Star Trek Fleet Command"),
+            "",
+        )
+        .expect("game executable");
+
+        let discovered = discover_game_root(crate::models::Platform::MacOs, home.path())
+            .expect("discover game root");
+
+        assert_eq!(discovered.as_deref(), Some(game_root.as_path()));
+    }
+
+    #[test]
+    fn discovers_windows_game_root_from_launcher_settings() {
+        let home = tempfile::tempdir().expect("tempdir");
+        let app_data = home.path().join("AppData/Local/Star Trek Fleet Command");
+        std::fs::create_dir_all(&app_data).expect("app data dir");
+        let game_root = home
+            .path()
+            .join("Games/Star Trek Fleet Command/Star Trek Fleet Command/default/game");
+        std::fs::create_dir_all(&game_root).expect("game dirs");
+        std::fs::write(game_root.join("prime.exe"), "").expect("prime exe");
+        std::fs::write(
+            app_data.join("launcher_settings.ini"),
+            format!(
+                "[General]\n152033..GAME_PATH={}\n",
+                game_root.to_string_lossy()
+            ),
+        )
+        .expect("settings");
+
+        let discovered = discover_game_root(crate::models::Platform::Windows, home.path())
+            .expect("discover game root");
+
+        assert_eq!(discovered.as_deref(), Some(game_root.as_path()));
+    }
+
+    #[test]
+    fn discovers_windows_default_game_root_without_settings() {
+        let home = tempfile::tempdir().expect("tempdir");
+        let game_root = home
+            .path()
+            .join("Games/Star Trek Fleet Command/Star Trek Fleet Command/default/game");
+        std::fs::create_dir_all(&game_root).expect("game dirs");
+        std::fs::write(game_root.join("prime.exe"), "").expect("prime exe");
+
+        let discovered = discover_windows_game_root(home.path()).expect("discover game root");
+
+        assert_eq!(discovered.as_deref(), Some(game_root.as_path()));
     }
 
     #[test]
@@ -367,7 +537,7 @@ mod tests {
         let settings_file = root.path().join("launcher_settings.ini");
         std::fs::create_dir(&settings_file).expect("settings dir");
         let locator = GameLocator::new(crate::models::Platform::MacOs);
-        let result = locator.from_launcher_settings_file(&settings_file);
+        let result = locator.read_launcher_settings_file(&settings_file);
 
         assert!(matches!(result, Err(LauncherError::Io { .. })));
     }
@@ -380,7 +550,7 @@ mod tests {
 
         let settings_file = PathBuf::from(OsString::from_vec(b"bad\0path".to_vec()));
         let locator = GameLocator::new(crate::models::Platform::MacOs);
-        let result = locator.from_launcher_settings_file(&settings_file);
+        let result = locator.read_launcher_settings_file(&settings_file);
 
         assert!(matches!(
             result,
@@ -393,8 +563,11 @@ mod tests {
         let root = tempfile::tempdir().expect("tempdir");
         let game_root = root.path();
         std::fs::write(game_root.join(".version"), "&game=168").expect("version");
-        std::fs::create_dir_all(game_root.join("drive_c/Program Files (x86)/Steam/steamapps/common/Star Trek Fleet Command"))
-            .expect("wine dirs");
+        std::fs::create_dir_all(
+            game_root
+                .join("drive_c/Program Files (x86)/Steam/steamapps/common/Star Trek Fleet Command"),
+        )
+        .expect("wine dirs");
         std::fs::write(
             game_root.join("drive_c/Program Files (x86)/Steam/steamapps/common/Star Trek Fleet Command/prime.exe"),
             "",
@@ -412,13 +585,8 @@ mod tests {
         let root = tempfile::tempdir().expect("tempdir");
         let game_root = root.path();
         std::fs::write(game_root.join(".version"), "&game=168").expect("version");
-        std::fs::create_dir_all(game_root.join("drive_c/Games/STFC"))
-            .expect("lutris dirs");
-        std::fs::write(
-            game_root.join("drive_c/Games/STFC/prime.exe"),
-            "",
-        )
-        .expect("prime exe");
+        std::fs::create_dir_all(game_root.join("drive_c/Games/STFC")).expect("lutris dirs");
+        std::fs::write(game_root.join("drive_c/Games/STFC/prime.exe"), "").expect("prime exe");
 
         assert!(is_valid_game_root(
             game_root,
@@ -432,11 +600,7 @@ mod tests {
         let game_root = root.path();
         std::fs::write(game_root.join(".version"), "&game=168").expect("version");
         std::fs::create_dir_all(game_root.join("Program Files/STFC")).expect("no drive_c");
-        std::fs::write(
-            game_root.join("Program Files/STFC/prime.exe"),
-            "",
-        )
-        .expect("prime exe");
+        std::fs::write(game_root.join("Program Files/STFC/prime.exe"), "").expect("prime exe");
 
         assert!(!is_valid_game_root(
             game_root,

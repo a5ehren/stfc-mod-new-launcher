@@ -46,6 +46,24 @@ pub fn build_launch_plan(
         (Platform::MacOs, LaunchMode::Managed) => {
             let executable = game_root
                 .join("Star Trek Fleet Command.app/Contents/MacOS/Star Trek Fleet Command");
+            if !executable.is_file() {
+                return Err(LauncherError::InvalidData {
+                    context: "building launch plan".into(),
+                    message: format!(
+                        "macOS game executable was not found at {}",
+                        executable.display()
+                    ),
+                });
+            }
+            if !mod_library.is_file() {
+                return Err(LauncherError::InvalidData {
+                    context: "building launch plan".into(),
+                    message: format!(
+                        "macOS mod library was not found at {}",
+                        mod_library.display()
+                    ),
+                });
+            }
             let mut environment = BTreeMap::new();
             environment.insert(
                 "DYLD_INSERT_LIBRARIES".into(),
@@ -92,11 +110,12 @@ pub fn build_launch_plan(
         }),
         (Platform::LinuxWine, LaunchMode::Managed) => {
             // Find prime.exe in the WINE prefix
-            let prime_exe = find_prime_exe_in_wine_prefix(game_root)
-                .ok_or_else(|| LauncherError::InvalidData {
+            let prime_exe = find_prime_exe_in_wine_prefix(game_root).ok_or_else(|| {
+                LauncherError::InvalidData {
                     context: "building launch plan".into(),
                     message: "prime.exe not found in WINE prefix".into(),
-                })?;
+                }
+            })?;
 
             // Determine wine command (could be wine, wine64, proton, etc.)
             let wine_cmd = std::env::var("STFC_WINE_CMD").unwrap_or_else(|_| "wine".to_string());
@@ -150,24 +169,80 @@ mod tests {
 
     #[test]
     fn mac_launch_plan_uses_dylib_injection() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let game_root = root.path();
+        std::fs::create_dir_all(game_root.join("Star Trek Fleet Command.app/Contents/MacOS"))
+            .expect("mac dirs");
+        std::fs::write(
+            game_root.join("Star Trek Fleet Command.app/Contents/MacOS/Star Trek Fleet Command"),
+            "",
+        )
+        .expect("mac executable");
+        let mod_library = game_root.join("libstfc-community-mod.dylib");
+        std::fs::write(&mod_library, "").expect("mod library");
+
         let plan = build_launch_plan(
             crate::models::Platform::MacOs,
-            std::path::Path::new("/game"),
-            std::path::Path::new("/mods/libstfc-community-mod.dylib"),
+            game_root,
+            &mod_library,
             crate::models::LaunchMode::Managed,
         )
         .expect("launch plan");
 
         assert_eq!(
             plan.executable,
-            "/game/Star Trek Fleet Command.app/Contents/MacOS/Star Trek Fleet Command"
+            game_root
+                .join("Star Trek Fleet Command.app/Contents/MacOS/Star Trek Fleet Command")
+                .to_string_lossy()
+        );
+        assert_eq!(
+            plan.working_dir,
+            Some(game_root.join("Star Trek Fleet Command.app/Contents/MacOS"))
         );
         assert_eq!(
             plan.environment
                 .get("DYLD_INSERT_LIBRARIES")
                 .map(String::as_str),
-            Some("/mods/libstfc-community-mod.dylib")
+            Some(mod_library.to_string_lossy().as_ref())
         );
+    }
+
+    #[test]
+    fn mac_launch_plan_rejects_missing_executable() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let mod_library = root.path().join("libstfc-community-mod.dylib");
+        std::fs::write(&mod_library, "").expect("mod library");
+
+        let result = build_launch_plan(
+            crate::models::Platform::MacOs,
+            root.path(),
+            &mod_library,
+            crate::models::LaunchMode::Managed,
+        );
+
+        assert!(matches!(result, Err(LauncherError::InvalidData { .. })));
+    }
+
+    #[test]
+    fn mac_launch_plan_rejects_missing_mod_library() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let game_root = root.path();
+        std::fs::create_dir_all(game_root.join("Star Trek Fleet Command.app/Contents/MacOS"))
+            .expect("mac dirs");
+        std::fs::write(
+            game_root.join("Star Trek Fleet Command.app/Contents/MacOS/Star Trek Fleet Command"),
+            "",
+        )
+        .expect("mac executable");
+
+        let result = build_launch_plan(
+            crate::models::Platform::MacOs,
+            game_root,
+            &game_root.join("libstfc-community-mod.dylib"),
+            crate::models::LaunchMode::Managed,
+        );
+
+        assert!(matches!(result, Err(LauncherError::InvalidData { .. })));
     }
 
     #[test]
@@ -189,11 +264,8 @@ mod tests {
         let root = tempfile::tempdir().expect("tempdir");
         let game_root = root.path();
         std::fs::create_dir_all(game_root.join("drive_c/Program Files/STFC")).expect("wine dirs");
-        std::fs::write(
-            game_root.join("drive_c/Program Files/STFC/prime.exe"),
-            "",
-        )
-        .expect("prime exe");
+        std::fs::write(game_root.join("drive_c/Program Files/STFC/prime.exe"), "")
+            .expect("prime exe");
 
         let plan = build_launch_plan(
             crate::models::Platform::LinuxWine,

@@ -1,7 +1,14 @@
+import { open } from "@tauri-apps/plugin-dialog";
 import { mount } from "@vue/test-utils";
 import { describe, expect, it, vi } from "vitest";
 import LcarsButton from "@/components/lcars/LcarsButton.vue";
-import { getLauncherStatus } from "@/lib/commands";
+import {
+	getLauncherStatus,
+	launchGame,
+	setGamePath,
+	updateGame,
+	validateGamePath,
+} from "@/lib/commands";
 import MainLauncher from "./MainLauncher.vue";
 
 vi.mock("@/lib/commands", () => ({
@@ -27,9 +34,15 @@ vi.mock("@/lib/commands", () => ({
 	openRawConfig: vi.fn(),
 	openConfigEditor: vi.fn(),
 	launchGame: vi.fn(),
+	setGamePath: vi.fn(),
+	validateGamePath: vi.fn(),
 	updateGame: vi.fn(),
 	updateMod: vi.fn(),
 	onProgress: vi.fn(async () => vi.fn()),
+}));
+
+vi.mock("@tauri-apps/plugin-dialog", () => ({
+	open: vi.fn(),
 }));
 
 describe("MainLauncher", () => {
@@ -82,5 +95,190 @@ describe("MainLauncher", () => {
 
 		expect(wrapper.text()).not.toContain("Update Game");
 		expect(wrapper.text()).not.toContain("Update Mod");
+	});
+
+	it("surfaces launch errors in the status strip", async () => {
+		vi.mocked(getLauncherStatus).mockResolvedValueOnce({
+			game: {
+				known: true,
+				path: "/game",
+				installedVersion: 168,
+				updateAvailable: false,
+			},
+			modStatus: {
+				installed: true,
+				installedVersion: "v1.0.0",
+				latestVersion: "v1.1.0",
+				channel: "stable",
+				updateAvailable: false,
+				launchMode: "managed",
+			},
+			launcherUpdateAvailable: false,
+		});
+		vi.mocked(launchGame).mockRejectedValueOnce(new Error("missing dylib"));
+
+		const wrapper = mount(MainLauncher);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		const buttons = wrapper.findAllComponents(LcarsButton);
+		await buttons[buttons.length - 1]?.trigger("click");
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		expect(wrapper.text()).toContain("Launch failed: Error: missing dylib");
+	});
+
+	it("formats object-shaped launch errors", async () => {
+		vi.mocked(getLauncherStatus).mockResolvedValueOnce({
+			game: {
+				known: true,
+				path: "/game",
+				installedVersion: 168,
+				updateAvailable: false,
+			},
+			modStatus: {
+				installed: true,
+				installedVersion: "v1.0.0",
+				latestVersion: "v1.1.0",
+				channel: "stable",
+				updateAvailable: false,
+				launchMode: "managed",
+			},
+			launcherUpdateAvailable: false,
+		});
+		vi.mocked(launchGame).mockRejectedValueOnce({
+			kind: "invalidData",
+			message: "game path is not known",
+		});
+
+		const wrapper = mount(MainLauncher);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		const buttons = wrapper.findAllComponents(LcarsButton);
+		await buttons[buttons.length - 1]?.trigger("click");
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		expect(wrapper.text()).toContain(
+			"Launch failed: invalidData: game path is not known",
+		);
+	});
+
+	it("prompts for a game folder when launch reports an unknown path", async () => {
+		vi.mocked(getLauncherStatus).mockResolvedValueOnce({
+			game: {
+				known: false,
+				path: null,
+				installedVersion: null,
+				updateAvailable: false,
+			},
+			modStatus: {
+				installed: true,
+				installedVersion: "v1.0.0",
+				latestVersion: "v1.1.0",
+				channel: "stable",
+				updateAvailable: false,
+				launchMode: "managed",
+			},
+			launcherUpdateAvailable: false,
+		});
+		vi.mocked(launchGame)
+			.mockRejectedValueOnce({
+				kind: "gamePath",
+				message: "game path is not known",
+			})
+			.mockResolvedValueOnce(undefined);
+		vi.mocked(open).mockResolvedValueOnce("/game");
+		vi.mocked(validateGamePath).mockResolvedValueOnce({
+			known: true,
+			path: "/game",
+			installedVersion: 168,
+			updateAvailable: false,
+		});
+		vi.mocked(setGamePath).mockResolvedValueOnce({
+			game: {
+				known: true,
+				path: "/game",
+				installedVersion: 168,
+				updateAvailable: false,
+			},
+			modStatus: {
+				installed: true,
+				installedVersion: "v1.0.0",
+				latestVersion: "v1.1.0",
+				channel: "stable",
+				updateAvailable: false,
+				launchMode: "managed",
+			},
+			launcherUpdateAvailable: false,
+		});
+
+		const wrapper = mount(MainLauncher);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		const buttons = wrapper.findAllComponents(LcarsButton);
+		await buttons[buttons.length - 1]?.trigger("click");
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		expect(open).toHaveBeenCalled();
+		expect(setGamePath).toHaveBeenCalledWith("/game");
+		expect(wrapper.text()).toContain("Game launch started");
+	});
+
+	it("prompts for a game folder when update reports an unknown path", async () => {
+		vi.mocked(getLauncherStatus).mockResolvedValueOnce({
+			game: {
+				known: false,
+				path: null,
+				installedVersion: null,
+				updateAvailable: true,
+			},
+			modStatus: {
+				installed: true,
+				installedVersion: "v1.0.0",
+				latestVersion: "v1.1.0",
+				channel: "stable",
+				updateAvailable: false,
+				launchMode: "managed",
+			},
+			launcherUpdateAvailable: false,
+		});
+		vi.mocked(updateGame)
+			.mockRejectedValueOnce({
+				kind: "gamePath",
+				message: "game path is not known",
+			})
+			.mockResolvedValueOnce(undefined);
+		vi.mocked(open).mockResolvedValueOnce("/game");
+		vi.mocked(validateGamePath).mockResolvedValueOnce({
+			known: true,
+			path: "/game",
+			installedVersion: 168,
+			updateAvailable: false,
+		});
+		vi.mocked(setGamePath).mockResolvedValueOnce({
+			game: {
+				known: true,
+				path: "/game",
+				installedVersion: 168,
+				updateAvailable: false,
+			},
+			modStatus: {
+				installed: true,
+				installedVersion: "v1.0.0",
+				latestVersion: "v1.1.0",
+				channel: "stable",
+				updateAvailable: false,
+				launchMode: "managed",
+			},
+			launcherUpdateAvailable: false,
+		});
+
+		const wrapper = mount(MainLauncher);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		const buttons = wrapper.findAllComponents(LcarsButton);
+		await buttons
+			.find((button) => button.text() === "Update Game")
+			?.trigger("click");
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		expect(open).toHaveBeenCalled();
+		expect(setGamePath).toHaveBeenCalledWith("/game");
+		expect(wrapper.text()).toContain("Game update started");
 	});
 });

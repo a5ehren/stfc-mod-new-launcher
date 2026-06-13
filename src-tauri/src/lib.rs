@@ -36,6 +36,7 @@ pub fn run() {
             commands::get_launcher_status,
             commands::validate_game_path,
             commands::set_mod_channel,
+            commands::set_game_path,
             commands::open_logs,
             commands::get_windows_legacy_cleanup_plan,
             commands::apply_managed_migration,

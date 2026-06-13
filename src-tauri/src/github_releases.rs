@@ -1,8 +1,12 @@
 use crate::errors::{LauncherError, LauncherResult};
 use crate::models::{ModChannel, Platform};
 use serde::Deserialize;
+use std::env;
 
 const STFC_MOD_RELEASES_URL: &str = "https://api.github.com/repos/netniV/stfc-mod/releases";
+const STFC_MOD_RELEASES_PAGE_URL: &str = "https://github.com/netniV/stfc-mod/releases";
+const GITHUB_API_VERSION: &str = "2022-11-28";
+const GITHUB_TOKEN_ENV_VARS: &[&str] = &["STFC_GITHUB_TOKEN", "GITHUB_TOKEN"];
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct GitHubRelease {
@@ -70,27 +74,86 @@ pub fn select_release_asset(
 }
 
 pub async fn fetch_releases(client: &reqwest::Client) -> LauncherResult<Vec<GitHubRelease>> {
-    fetch_releases_from(client, STFC_MOD_RELEASES_URL).await
+    match fetch_releases_from(client, STFC_MOD_RELEASES_URL).await {
+        Ok(releases) => Ok(releases),
+        Err(api_error) => match fetch_releases_from_html(client).await {
+            Ok(releases) => Ok(releases),
+            Err(html_error) => Err(LauncherError::Operation {
+                context: "fetching STFC mod releases".into(),
+                message: format!(
+                    "{api_error}; fallback GitHub page fetch also failed: {html_error}"
+                ),
+            }),
+        },
+    }
 }
 
 async fn fetch_releases_from(
     client: &reqwest::Client,
     url: &str,
 ) -> LauncherResult<Vec<GitHubRelease>> {
-    let response = client
+    fetch_releases_from_with_token(client, url, github_token().as_deref()).await
+}
+
+async fn fetch_releases_from_with_token(
+    client: &reqwest::Client,
+    url: &str,
+    token: Option<&str>,
+) -> LauncherResult<Vec<GitHubRelease>> {
+    let request = client
         .get(url)
         .header(reqwest::header::USER_AGENT, "stfc-mod-launcher")
-        .send()
-        .await
-        .map_err(|source| crate::errors::LauncherError::Network {
-            context: "fetching STFC mod releases".into(),
-            source,
-        })?
-        .error_for_status()
-        .map_err(|source| crate::errors::LauncherError::Network {
+        .header(reqwest::header::ACCEPT, "application/vnd.github+json")
+        .header("X-GitHub-Api-Version", GITHUB_API_VERSION);
+    let request = if let Some(token) = token {
+        request.bearer_auth(token)
+    } else {
+        request
+    };
+
+    let response =
+        request
+            .send()
+            .await
+            .map_err(|source| crate::errors::LauncherError::Network {
+                context: "fetching STFC mod releases".into(),
+                source,
+            })?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let retry_after = response
+            .headers()
+            .get(reqwest::header::RETRY_AFTER)
+            .and_then(|value| value.to_str().ok())
+            .map(ToOwned::to_owned);
+        let body =
+            response
+                .text()
+                .await
+                .map_err(|source| crate::errors::LauncherError::Network {
+                    context: "reading STFC mod releases error response".into(),
+                    source,
+                })?;
+
+        let mut message = format!("GitHub releases request failed with {status}");
+        let trimmed_body = body.trim();
+        if !trimmed_body.is_empty() {
+            message.push_str(": ");
+            message.push_str(trimmed_body);
+        }
+        if let Some(retry_after) = retry_after {
+            message.push_str(" (Retry-After: ");
+            message.push_str(&retry_after);
+            message.push(')');
+        }
+
+        return Err(LauncherError::Operation {
             context: "checking STFC mod releases response".into(),
-            source,
-        })?;
+            message,
+        });
+    }
+
     response
         .json()
         .await
@@ -98,6 +161,88 @@ async fn fetch_releases_from(
             context: "parsing STFC mod releases response".into(),
             source,
         })
+}
+
+async fn fetch_releases_from_html(client: &reqwest::Client) -> LauncherResult<Vec<GitHubRelease>> {
+    let response = client
+        .get(STFC_MOD_RELEASES_PAGE_URL)
+        .header(reqwest::header::USER_AGENT, "stfc-mod-launcher")
+        .send()
+        .await
+        .map_err(|source| LauncherError::Network {
+            context: "fetching STFC mod releases page".into(),
+            source,
+        })?
+        .error_for_status()
+        .map_err(|source| LauncherError::Network {
+            context: "checking STFC mod releases page response".into(),
+            source,
+        })?;
+
+    let html = response
+        .text()
+        .await
+        .map_err(|source| LauncherError::Network {
+            context: "reading STFC mod releases page".into(),
+            source,
+        })?;
+    Ok(parse_releases_from_html(&html))
+}
+
+fn parse_releases_from_html(html: &str) -> Vec<GitHubRelease> {
+    let mut releases = Vec::new();
+    let mut search_from = 0;
+    let marker = r#"href="/netniV/stfc-mod/releases/tag/"#;
+
+    while let Some(relative_index) = html[search_from..].find(marker) {
+        let href_start = search_from + relative_index + marker.len();
+        let Some(href_end_offset) = html[href_start..].find('"') else {
+            break;
+        };
+        let href_end = href_start + href_end_offset;
+        let tag_name = html[href_start..href_end].to_string();
+        let next_entry = html[href_end..]
+            .find(marker)
+            .map(|offset| href_end + offset)
+            .unwrap_or(html.len());
+        let prerelease = html[href_end..next_entry].contains("Pre-release");
+
+        releases.push(GitHubRelease {
+            tag_name,
+            prerelease,
+            assets: release_assets_from_tag(&html[href_start..href_end]),
+        });
+        search_from = href_end;
+    }
+
+    releases
+}
+
+fn release_assets_from_tag(tag_name: &str) -> Vec<GitHubAsset> {
+    let mut assets = Vec::new();
+    for platform in [Platform::Windows, Platform::MacOs] {
+        let archive_name = expected_archive_name(platform);
+        let archive_url = format!(
+            "https://github.com/netniV/stfc-mod/releases/download/{tag_name}/{archive_name}"
+        );
+        let checksum_url = format!("{archive_url}.sha256");
+        assets.push(GitHubAsset {
+            name: archive_name.to_string(),
+            browser_download_url: archive_url,
+        });
+        assets.push(GitHubAsset {
+            name: format!("{archive_name}.sha256"),
+            browser_download_url: checksum_url,
+        });
+    }
+    assets
+}
+
+fn github_token() -> Option<String> {
+    GITHUB_TOKEN_ENV_VARS
+        .iter()
+        .find_map(|name| env::var(name).ok())
+        .filter(|value| !value.trim().is_empty())
 }
 
 #[cfg(test)]
@@ -391,13 +536,39 @@ mod tests {
         );
         let client = reqwest::Client::new();
 
-        let releases = tauri::async_runtime::block_on(fetch_releases_from(&client, &server.url))
-            .expect("releases");
+        let releases = tauri::async_runtime::block_on(fetch_releases_from_with_token(
+            &client,
+            &server.url,
+            None,
+        ))
+        .expect("releases");
         let request = server.request();
 
         assert_eq!(releases.len(), 2);
         assert!(request.starts_with("GET /repos/netniV/stfc-mod/releases HTTP/1.1"));
         assert!(request.contains("user-agent: stfc-mod-launcher\r\n"));
+        assert!(request.contains("accept: application/vnd.github+json\r\n"));
+        assert!(request.contains("x-github-api-version: 2022-11-28\r\n"));
+    }
+
+    #[test]
+    fn fetch_releases_sends_bearer_token_when_configured() {
+        let server = TestServer::respond_once(
+            "/repos/netniV/stfc-mod/releases",
+            "200 OK",
+            include_str!("../tests/fixtures/github_releases.json"),
+        );
+        let client = reqwest::Client::new();
+
+        let _ = tauri::async_runtime::block_on(fetch_releases_from_with_token(
+            &client,
+            &server.url,
+            Some("secret-token"),
+        ))
+        .expect("releases");
+        let request = server.request();
+
+        assert!(request.contains("authorization: Bearer secret-token\r\n"));
     }
 
     #[test]
@@ -405,14 +576,19 @@ mod tests {
         let server = TestServer::respond_once("/releases", "500 Internal Server Error", "[]");
         let client = reqwest::Client::new();
 
-        let result = tauri::async_runtime::block_on(fetch_releases_from(&client, &server.url));
+        let result = tauri::async_runtime::block_on(fetch_releases_from_with_token(
+            &client,
+            &server.url,
+            None,
+        ));
         server.request();
 
         match result {
-            Err(LauncherError::Network { context, .. }) => {
+            Err(LauncherError::Operation { context, message }) => {
                 assert_eq!(context, "checking STFC mod releases response");
+                assert!(message.contains("500 Internal Server Error"));
             }
-            other => panic!("expected status-checking network error, got {other:?}"),
+            other => panic!("expected status-checking operation error, got {other:?}"),
         }
     }
 
@@ -421,7 +597,11 @@ mod tests {
         let server = TestServer::respond_once("/releases", "200 OK", "not json");
         let client = reqwest::Client::new();
 
-        let result = tauri::async_runtime::block_on(fetch_releases_from(&client, &server.url));
+        let result = tauri::async_runtime::block_on(fetch_releases_from_with_token(
+            &client,
+            &server.url,
+            None,
+        ));
         server.request();
 
         match result {
@@ -441,8 +621,12 @@ mod tests {
         );
         let client = reqwest::Client::new();
 
-        let releases = tauri::async_runtime::block_on(fetch_releases_from(&client, &server.url))
-            .expect("releases");
+        let releases = tauri::async_runtime::block_on(fetch_releases_from_with_token(
+            &client,
+            &server.url,
+            None,
+        ))
+        .expect("releases");
         server.request();
 
         assert_eq!(releases.len(), 2);

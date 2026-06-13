@@ -16,6 +16,10 @@ export function setModChannel(channel: ModChannel): Promise<LauncherStatus> {
 	return invoke("set_mod_channel", { channel });
 }
 
+export function setGamePath(path: string): Promise<LauncherStatus> {
+	return invoke("set_game_path", { path });
+}
+
 export function openLogs(): Promise<void> {
 	return invoke("open_logs");
 }

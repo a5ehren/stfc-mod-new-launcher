@@ -365,10 +365,13 @@ pub async fn fetch_update_plan(
             context: format!("checking Xsolla update plan response from {url}"),
             source,
         })?;
-    let xml = response.text().await.map_err(|source| LauncherError::Network {
-        context: format!("reading Xsolla update plan from {url}"),
-        source,
-    })?;
+    let xml = response
+        .text()
+        .await
+        .map_err(|source| LauncherError::Network {
+            context: format!("reading Xsolla update plan from {url}"),
+            source,
+        })?;
     let plan = crate::xsolla::parse_update_plan(&xml)?;
     if let Some(target_version) = plan.target_version {
         if target_version <= installed_version {
