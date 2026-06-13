@@ -14,7 +14,6 @@ import {
 	setModChannel,
 	updateGame as updateGameCommand,
 	updateMod as updateModCommand,
-	validateGamePath,
 } from "@/lib/commands";
 import { formatError } from "@/lib/formatError";
 import type { LauncherStatus } from "@/types/launcher";
@@ -49,12 +48,14 @@ async function launchGame() {
 	message.value = warning.value
 		? `${warning.value}. Launching anyway.`
 		: "Launching game";
-	await runCommandWithGamePathFallback(
+	const result = await runCommandWithGamePathFallback(
 		launchGameCommand,
-		"Game launch started",
 		"Launch cancelled: no game folder selected",
 		"Launch failed",
 	);
+	if (result.ok) {
+		message.value = "Game launch started";
+	}
 }
 
 function isLauncherErrorKind(error: unknown, kind: string): boolean {
@@ -77,27 +78,30 @@ async function promptForGamePath() {
 		return false;
 	}
 
-	const validated = await validateGamePath(selected);
-	if (!validated.path) {
-		message.value = "Selected folder was not a valid STFC game folder";
-		return false;
+	try {
+		await setGamePath(selected);
+		return true;
+	} catch (error) {
+		if (isLauncherErrorKind(error, "invalidData")) {
+			message.value = "Selected folder was not a valid STFC game folder";
+			return false;
+		}
+		throw error;
 	}
-
-	await setGamePath(validated.path);
-	return true;
 }
 
 async function updateGame() {
 	message.value = "Checking for game update";
-	const updated = await runCommandWithGamePathFallback(
+	const result = await runCommandWithGamePathFallback(
 		updateGameCommand,
-		"Game update complete",
 		"Update cancelled: no game folder selected",
 		"Update failed",
 	);
-	if (updated) {
+	if (result.ok) {
 		await refresh();
-		message.value = "Game update complete";
+		message.value = result.value
+			? "Game update complete"
+			: "Game already up to date";
 	}
 }
 
@@ -128,33 +132,30 @@ async function openConfigEditor() {
 	});
 }
 
-async function runCommandWithGamePathFallback(
-	command: () => Promise<void>,
-	successMessage: string,
+async function runCommandWithGamePathFallback<T>(
+	command: () => Promise<T>,
 	cancelMessage: string,
 	failureLabel: string,
-) {
+): Promise<{ ok: boolean; value?: T }> {
 	try {
-		await command();
-		message.value = successMessage;
-		return true;
+		const value = await command();
+		return { ok: true, value };
 	} catch (error) {
 		if (isLauncherErrorKind(error, "gamePath")) {
 			try {
 				const selected = await promptForGamePath();
 				if (selected) {
-					await command();
-					message.value = successMessage;
-					return true;
+					const value = await command();
+					return { ok: true, value };
 				}
 				message.value = cancelMessage;
 			} catch (promptError) {
 				message.value = `${failureLabel}: ${formatError(promptError)}`;
 			}
-			return false;
+			return { ok: false };
 		}
 		message.value = `${failureLabel}: ${formatError(error)}`;
-		return false;
+		return { ok: false };
 	}
 }
 

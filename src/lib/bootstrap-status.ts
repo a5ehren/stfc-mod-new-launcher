@@ -1,4 +1,5 @@
 import { ref } from "vue";
+import { formatError } from "@/lib/formatError";
 
 const defaultStatus = "Starting launcher";
 
@@ -14,11 +15,7 @@ export function resetBootstrapStatus() {
 }
 
 export function setBootstrapError(error: unknown) {
-	if (error instanceof Error) {
-		bootstrapError.value = error.stack ?? error.message;
-		return;
-	}
-	bootstrapError.value = String(error);
+	bootstrapError.value = formatError(error);
 }
 
 export function clearBootstrapError() {

@@ -50,7 +50,7 @@ export function launchGame(): Promise<void> {
 	return invoke("launch_game");
 }
 
-export function updateGame(): Promise<void> {
+export function updateGame(): Promise<boolean> {
 	return invoke("update_game");
 }
 
