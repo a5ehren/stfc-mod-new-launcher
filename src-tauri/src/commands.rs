@@ -4,8 +4,8 @@ use crate::events::ProgressEvent;
 use crate::models::LauncherStatus;
 use std::future::Future;
 use std::path::PathBuf;
+use tauri::Emitter;
 use tauri::State;
-use tauri::{Emitter, Manager};
 use tauri_plugin_opener::OpenerExt;
 
 pub type CommandResult<T> = Result<T, ErrorDto>;
@@ -303,14 +303,56 @@ mod tests {
         assert!(invoked.load(Ordering::SeqCst));
         assert!(mod_library.is_file());
     }
+
+    fn mock_app() -> tauri::App<tauri::test::MockRuntime> {
+        tauri::test::mock_builder()
+            .build(tauri::test::mock_context(tauri::test::noop_assets()))
+            .expect("mock app")
+    }
+
+    #[test]
+    fn open_config_editor_creates_window_when_absent() {
+        use tauri::Manager;
+
+        let app = mock_app();
+        assert!(app.get_webview_window("config-editor").is_none());
+
+        open_or_focus_config_editor(&app).expect("create config editor window");
+
+        assert!(app.get_webview_window("config-editor").is_some());
+    }
+
+    #[test]
+    fn open_config_editor_focuses_existing_window() {
+        use tauri::Manager;
+
+        let app = mock_app();
+        tauri::WebviewWindowBuilder::new(&app, "config-editor", tauri::WebviewUrl::App("/".into()))
+            .build()
+            .expect("seed config editor window");
+
+        // Calling again must not error or create a second window; it focuses the
+        // existing one.
+        open_or_focus_config_editor(&app).expect("focus existing config editor window");
+
+        assert!(app.get_webview_window("config-editor").is_some());
+    }
 }
 
 #[tauri::command]
 pub async fn open_config_editor(app: tauri::AppHandle) -> CommandResult<()> {
+    open_or_focus_config_editor(&app)
+}
+
+/// Focuses the config-editor window if it already exists, otherwise creates it.
+/// Generic over the runtime so it can be exercised under `tauri::test`'s mock
+/// runtime (which builds windows without spawning a native webview).
+fn open_or_focus_config_editor<R: tauri::Runtime>(
+    manager: &impl tauri::Manager<R>,
+) -> CommandResult<()> {
     use tauri::{WebviewUrl, WebviewWindowBuilder};
 
-    let existing = app.get_webview_window("config-editor");
-    if let Some(window) = existing {
+    if let Some(window) = manager.get_webview_window("config-editor") {
         window.set_focus().map_err(|err| ErrorDto {
             kind: "openConfigEditor".into(),
             message: err.to_string(),
@@ -318,7 +360,7 @@ pub async fn open_config_editor(app: tauri::AppHandle) -> CommandResult<()> {
         return Ok(());
     }
 
-    WebviewWindowBuilder::new(&app, "config-editor", WebviewUrl::App("/".into()))
+    WebviewWindowBuilder::new(manager, "config-editor", WebviewUrl::App("/".into()))
         .title("STFC Mod Config")
         .inner_size(980.0, 720.0)
         .build()

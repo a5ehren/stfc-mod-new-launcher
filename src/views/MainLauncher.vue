@@ -8,6 +8,7 @@ import {
 	getLauncherStatus,
 	launchGame as launchGameCommand,
 	onProgress,
+	openConfigEditor,
 	openLogs,
 	openRawConfig,
 	setGamePath,
@@ -115,21 +116,6 @@ async function toggleChannel() {
 	const next =
 		status.value?.modStatus.channel === "prerelease" ? "stable" : "prerelease";
 	status.value = await setModChannel(next);
-}
-
-async function openConfigEditor() {
-	const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
-	const existing = await WebviewWindow.getByLabel("config-editor");
-	if (existing) {
-		await existing.setFocus();
-		return;
-	}
-	new WebviewWindow("config-editor", {
-		title: "STFC Mod Config",
-		url: "/",
-		width: 980,
-		height: 720,
-	});
 }
 
 async function runCommandWithGamePathFallback<T>(
