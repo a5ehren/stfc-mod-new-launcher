@@ -13,6 +13,41 @@ pub struct GameUpdateContext {
     pub staging_root: PathBuf,
 }
 
+struct UpdateWorkspaceCleanup {
+    paths: Vec<PathBuf>,
+    active: bool,
+}
+
+impl UpdateWorkspaceCleanup {
+    fn new(context: &GameUpdateContext) -> Self {
+        Self {
+            paths: vec![
+                context.xsolla_temp_root.clone(),
+                context.staging_root.clone(),
+            ],
+            active: true,
+        }
+    }
+
+    fn cleanup(&mut self) {
+        if !self.active {
+            return;
+        }
+        for path in &self.paths {
+            if path.exists() {
+                let _ = fs::remove_dir_all(path);
+            }
+        }
+        self.active = false;
+    }
+}
+
+impl Drop for UpdateWorkspaceCleanup {
+    fn drop(&mut self) {
+        self.cleanup();
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 struct PatchRule {
     relative_path: String,
@@ -151,6 +186,7 @@ pub async fn run_update_plan(
     })?;
     fs::create_dir_all(&context.staging_root)
         .map_err(|err| io_context(format!("creating {}", context.staging_root.display()), err))?;
+    let mut workspace_cleanup = UpdateWorkspaceCleanup::new(context);
 
     let mut pending_deletes = Vec::new();
     let mut pending_version = None;
@@ -331,12 +367,7 @@ pub async fn run_update_plan(
         "cleanup",
         "removing temporary update files",
     ));
-    if context.xsolla_temp_root.exists() {
-        let _ = fs::remove_dir_all(&context.xsolla_temp_root);
-    }
-    if context.staging_root.exists() {
-        let _ = fs::remove_dir_all(&context.staging_root);
-    }
+    workspace_cleanup.cleanup();
 
     progress(ProgressEvent::message(
         "gameUpdate",
@@ -420,5 +451,34 @@ mod tests {
             xsolla_update_url(168, Platform::LinuxWine),
             "https://gus.xsolla.com/updates?version=168&project_id=152033&region=&platform=windows"
         );
+    }
+
+    #[test]
+    fn run_update_plan_cleans_workspace_after_action_error() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let game = root.path().join("game");
+        let xsolla_temp = root.path().join("xsolla-temp");
+        let staging = root.path().join("staging");
+        std::fs::create_dir_all(&game).expect("game dir");
+        let plan = XsollaPlan {
+            target_version: Some(169),
+            actions: vec![XsollaAction::Extract {
+                file: "$temp_path/missing.7z".into(),
+                to: "$game_path".into(),
+            }],
+        };
+        let context = GameUpdateContext {
+            game_root: game,
+            xsolla_temp_root: xsolla_temp.clone(),
+            staging_root: staging.clone(),
+        };
+        let client = reqwest::Client::new();
+
+        let result =
+            tauri::async_runtime::block_on(run_update_plan(&client, &plan, &context, |_| {}));
+
+        assert!(result.is_err());
+        assert!(!xsolla_temp.exists(), "xsolla temp root should be removed");
+        assert!(!staging.exists(), "staging root should be removed");
     }
 }
