@@ -2,9 +2,10 @@ use crate::app_state::AppState;
 use crate::errors::{ErrorDto, LauncherResult};
 use crate::events::ProgressEvent;
 use crate::models::LauncherStatus;
+use std::future::Future;
 use std::path::PathBuf;
-use tauri::{Emitter, Manager};
 use tauri::State;
+use tauri::{Emitter, Manager};
 use tauri_plugin_opener::OpenerExt;
 
 pub type CommandResult<T> = Result<T, ErrorDto>;
@@ -53,6 +54,37 @@ pub fn set_mod_channel(
         message: "launcher status lock is poisoned".into(),
     })?;
     status.mod_status.channel = channel;
+    Ok(status.clone())
+}
+
+#[tauri::command]
+pub fn set_game_path(
+    state: State<'_, AppState>,
+    path: String,
+) -> CommandResult<crate::models::LauncherStatus> {
+    let game_path = PathBuf::from(path);
+    let validated = crate::game_locator::GameLocator::new(crate::models::current_platform())
+        .validate_manual_root(game_path)
+        .map_err(ErrorDto::from)?;
+
+    {
+        let mut persisted = state.persisted.lock().map_err(|_| ErrorDto {
+            kind: "state".into(),
+            message: "launcher state lock is poisoned".into(),
+        })?;
+        let mut updated = persisted.clone();
+        updated.game_path = Some(validated.clone());
+        crate::storage::save_state(&state.paths, &updated).map_err(ErrorDto::from)?;
+        *persisted = updated;
+    }
+
+    let mut status = state.status.lock().map_err(|_| ErrorDto {
+        kind: "state".into(),
+        message: "launcher status lock is poisoned".into(),
+    })?;
+    status.game.known = true;
+    status.game.path = Some(validated.to_string_lossy().to_string());
+    status.game.installed_version = crate::game_locator::installed_version(&validated);
     Ok(status.clone())
 }
 
@@ -156,29 +188,31 @@ pub async fn open_raw_config(
 }
 
 #[tauri::command]
-pub fn launch_game(app: tauri::AppHandle, state: State<'_, AppState>) -> CommandResult<()> {
-    let persisted = state.persisted.lock().map_err(|_| ErrorDto {
-        kind: "state".into(),
-        message: "launcher state lock is poisoned".into(),
-    })?;
-    let game_path = persisted.game_path.clone().ok_or_else(|| ErrorDto {
-        kind: "gamePath".into(),
-        message: "game path is not known".into(),
-    })?;
+pub async fn launch_game(app: tauri::AppHandle, state: State<'_, AppState>) -> CommandResult<()> {
     let platform = crate::models::current_platform();
+    let launch_mode = {
+        let persisted = state.persisted.lock().map_err(|_| ErrorDto {
+            kind: "state".into(),
+            message: "launcher state lock is poisoned".into(),
+        })?;
+        persisted.launch_mode
+    };
+    let game_path = resolve_game_path(&state, platform).await?;
     let mod_library = state
         .paths
         .mods_dir
         .join(crate::mod_manager::platform_library_name(platform));
-    let plan =
-        crate::launch::build_launch_plan(platform, &game_path, &mod_library, persisted.launch_mode)
-            .map_err(ErrorDto::from)?;
+    if !mod_library.is_file() {
+        ensure_mod_library_installed(&mod_library, || async {
+            perform_mod_update(&app, &state).await
+        })
+        .await?;
+    }
+    let plan = crate::launch::build_launch_plan(platform, &game_path, &mod_library, launch_mode)
+        .map_err(ErrorDto::from)?;
     state
         .diagnostics
-        .info(
-            "launch",
-            &format!("launching with mode {:?}", persisted.launch_mode),
-        )
+        .info("launch", &format!("launching with mode {:?}", launch_mode))
         .map_err(ErrorDto::from)?;
     emit_progress(
         &app,
@@ -212,6 +246,7 @@ mod tests {
     use super::*;
     use crate::errors::LauncherError;
     use crate::models::{ModChannel, PersistedState};
+    use std::sync::atomic::{AtomicBool, Ordering};
 
     #[test]
     fn open_logs_error_uses_command_kind() {
@@ -254,6 +289,23 @@ mod tests {
 
         assert_eq!(persisted.mod_channel, ModChannel::Prerelease);
     }
+
+    #[test]
+    fn ensure_mod_library_installed_runs_update_when_missing() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let mod_library = root.path().join("libstfc-community-mod.dylib");
+        let invoked = AtomicBool::new(false);
+
+        tauri::async_runtime::block_on(ensure_mod_library_installed(&mod_library, || async {
+            invoked.store(true, Ordering::SeqCst);
+            std::fs::write(&mod_library, "mod").expect("write mod");
+            Ok(())
+        }))
+        .expect("ensure installed");
+
+        assert!(invoked.load(Ordering::SeqCst));
+        assert!(mod_library.is_file());
+    }
 }
 
 #[tauri::command]
@@ -269,18 +321,14 @@ pub async fn open_config_editor(app: tauri::AppHandle) -> CommandResult<()> {
         return Ok(());
     }
 
-    WebviewWindowBuilder::new(
-        &app,
-        "config-editor",
-        WebviewUrl::App("/".into()),
-    )
-    .title("STFC Mod Config")
-    .inner_size(980.0, 720.0)
-    .build()
-    .map_err(|err| ErrorDto {
-        kind: "openConfigEditor".into(),
-        message: err.to_string(),
-    })?;
+    WebviewWindowBuilder::new(&app, "config-editor", WebviewUrl::App("/".into()))
+        .title("STFC Mod Config")
+        .inner_size(980.0, 720.0)
+        .build()
+        .map_err(|err| ErrorDto {
+            kind: "openConfigEditor".into(),
+            message: err.to_string(),
+        })?;
     Ok(())
 }
 
@@ -288,16 +336,7 @@ pub async fn open_config_editor(app: tauri::AppHandle) -> CommandResult<()> {
 pub async fn update_game(app: tauri::AppHandle, state: State<'_, AppState>) -> CommandResult<()> {
     let diagnostics = state.diagnostics.clone();
     let staging_dir = state.paths.staging_dir.clone();
-    let game_path = {
-        let persisted = state.persisted.lock().map_err(|_| ErrorDto {
-            kind: "state".into(),
-            message: "launcher state lock is poisoned".into(),
-        })?;
-        persisted.game_path.clone().ok_or_else(|| ErrorDto {
-            kind: "gamePath".into(),
-            message: "game path is not known".into(),
-        })?
-    };
+    let game_path = resolve_game_path(&state, crate::models::current_platform()).await?;
     let platform = crate::models::current_platform();
     let installed_version = crate::game_locator::installed_version(&game_path).unwrap_or(0);
     let client = reqwest::Client::new();
@@ -362,6 +401,13 @@ pub async fn update_game(app: tauri::AppHandle, state: State<'_, AppState>) -> C
 
 #[tauri::command]
 pub async fn update_mod(app: tauri::AppHandle, state: State<'_, AppState>) -> CommandResult<()> {
+    perform_mod_update(&app, &state).await
+}
+
+async fn perform_mod_update(
+    app: &tauri::AppHandle,
+    state: &State<'_, AppState>,
+) -> CommandResult<()> {
     let platform = crate::models::current_platform();
     let channel = {
         let persisted = state.persisted.lock().map_err(|_| ErrorDto {
@@ -388,9 +434,8 @@ pub async fn update_mod(app: tauri::AppHandle, state: State<'_, AppState>) -> Co
     let releases = crate::github_releases::fetch_releases(&client)
         .await
         .map_err(ErrorDto::from)?;
-    let selected =
-        crate::github_releases::select_release_asset(&releases, platform, channel)
-            .map_err(ErrorDto::from)?;
+    let selected = crate::github_releases::select_release_asset(&releases, platform, channel)
+        .map_err(ErrorDto::from)?;
 
     emit_progress(
         &progress_app,
@@ -438,7 +483,8 @@ pub async fn update_mod(app: tauri::AppHandle, state: State<'_, AppState>) -> Co
             kind: "network".into(),
             message: source.to_string(),
         })?;
-    let expected_checksum = crate::mod_manager::parse_sha256(&checksum_text).map_err(ErrorDto::from)?;
+    let expected_checksum =
+        crate::mod_manager::parse_sha256(&checksum_text).map_err(ErrorDto::from)?;
 
     let update_dir = tempfile::Builder::new()
         .prefix("mod-update")
@@ -475,8 +521,9 @@ pub async fn update_mod(app: tauri::AppHandle, state: State<'_, AppState>) -> Co
         &progress_app,
         ProgressEvent::message("modUpdate", "install", "installing mod library"),
     );
-    let installed = crate::mod_manager::install_staged_library(&extract_dir, &state.paths.mods_dir, platform)
-        .map_err(ErrorDto::from)?;
+    let installed =
+        crate::mod_manager::install_staged_library(&extract_dir, &state.paths.mods_dir, platform)
+            .map_err(ErrorDto::from)?;
 
     {
         let mut persisted = state.persisted.lock().map_err(|_| ErrorDto {
@@ -514,5 +561,88 @@ pub async fn update_mod(app: tauri::AppHandle, state: State<'_, AppState>) -> Co
         &progress_app,
         ProgressEvent::message("modUpdate", "complete", "mod update completed"),
     );
+    Ok(())
+}
+
+async fn ensure_mod_library_installed<F, Fut>(
+    mod_library: &std::path::Path,
+    update_mod: F,
+) -> CommandResult<()>
+where
+    F: FnOnce() -> Fut,
+    Fut: Future<Output = CommandResult<()>>,
+{
+    if mod_library.is_file() {
+        return Ok(());
+    }
+
+    update_mod().await?;
+    if mod_library.is_file() {
+        return Ok(());
+    }
+
+    Err(ErrorDto {
+        kind: "invalidData".into(),
+        message: format!(
+            "mod update completed but {} was still missing",
+            mod_library.display()
+        ),
+    })
+}
+
+async fn resolve_game_path(
+    state: &State<'_, AppState>,
+    platform: crate::models::Platform,
+) -> CommandResult<PathBuf> {
+    let persisted_path = {
+        let persisted = state.persisted.lock().map_err(|_| ErrorDto {
+            kind: "state".into(),
+            message: "launcher state lock is poisoned".into(),
+        })?;
+        persisted.game_path.clone()
+    };
+    if let Some(path) = persisted_path {
+        return Ok(path);
+    }
+
+    let home_dir = std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("USERPROFILE").map(PathBuf::from))
+        .ok_or_else(|| ErrorDto {
+            kind: "gamePath".into(),
+            message: "game path is not known".into(),
+        })?;
+    let discovered =
+        crate::game_locator::discover_game_root(platform, &home_dir).map_err(ErrorDto::from)?;
+    let Some(path) = discovered else {
+        return Err(ErrorDto {
+            kind: "gamePath".into(),
+            message: "game path is not known".into(),
+        });
+    };
+
+    persist_game_path(state, &path)?;
+    Ok(path)
+}
+
+fn persist_game_path(state: &State<'_, AppState>, path: &std::path::Path) -> CommandResult<()> {
+    {
+        let mut persisted = state.persisted.lock().map_err(|_| ErrorDto {
+            kind: "state".into(),
+            message: "launcher state lock is poisoned".into(),
+        })?;
+        let mut updated = persisted.clone();
+        updated.game_path = Some(path.to_path_buf());
+        crate::storage::save_state(&state.paths, &updated).map_err(ErrorDto::from)?;
+        *persisted = updated;
+    }
+
+    let mut status = state.status.lock().map_err(|_| ErrorDto {
+        kind: "state".into(),
+        message: "launcher status lock is poisoned".into(),
+    })?;
+    status.game.known = true;
+    status.game.path = Some(path.to_string_lossy().to_string());
+    status.game.installed_version = crate::game_locator::installed_version(path);
     Ok(())
 }

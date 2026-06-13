@@ -17,7 +17,7 @@
 		"prepare": "husky",
 		"lint": "biome check --write",
 		"format": "biome format --write",
-		"check": "biome check"
+		"check": "biome check && cd src-tauri && cargo fmt --check && cargo clippy --all-targets -- -D warnings"
 	},
 	"dependencies": {
 		"@tauri-apps/api": "^2.11.0",

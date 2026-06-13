@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { open } from "@tauri-apps/plugin-dialog";
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import LcarsButton from "@/components/lcars/LcarsButton.vue";
 import LcarsShell from "@/components/lcars/LcarsShell.vue";
@@ -9,10 +10,13 @@ import {
 	onProgress,
 	openLogs,
 	openRawConfig,
+	setGamePath,
 	setModChannel,
 	updateGame as updateGameCommand,
 	updateMod as updateModCommand,
+	validateGamePath,
 } from "@/lib/commands";
+import { formatError } from "@/lib/formatError";
 import type { LauncherStatus } from "@/types/launcher";
 
 const status = ref<LauncherStatus | null>(null);
@@ -45,14 +49,54 @@ async function launchGame() {
 	message.value = warning.value
 		? `${warning.value}. Launching anyway.`
 		: "Launching game";
-	await launchGameCommand();
-	message.value = "Game launch started";
+	await runCommandWithGamePathFallback(
+		launchGameCommand,
+		"Game launch started",
+		"Launch cancelled: no game folder selected",
+		"Launch failed",
+	);
+}
+
+function isLauncherErrorKind(error: unknown, kind: string): boolean {
+	return (
+		typeof error === "object" &&
+		error !== null &&
+		"kind" in error &&
+		(error as { kind?: unknown }).kind === kind
+	);
+}
+
+async function promptForGamePath() {
+	const selected = await open({
+		directory: true,
+		multiple: false,
+		title: "Select STFC game folder",
+	});
+
+	if (!selected || Array.isArray(selected)) {
+		return false;
+	}
+
+	const validated = await validateGamePath(selected);
+	if (!validated.path) {
+		message.value = "Selected folder was not a valid STFC game folder";
+		return false;
+	}
+
+	await setGamePath(validated.path);
+	return true;
 }
 
 async function updateGame() {
 	message.value = "Checking for game update";
-	await updateGameCommand();
+	await runCommandWithGamePathFallback(
+		updateGameCommand,
+		"Game update started",
+		"Update cancelled: no game folder selected",
+		"Update failed",
+	);
 	await refresh();
+	message.value = "Game update started";
 }
 
 async function updateMod() {
@@ -80,6 +124,34 @@ async function openConfigEditor() {
 		width: 980,
 		height: 720,
 	});
+}
+
+async function runCommandWithGamePathFallback(
+	command: () => Promise<void>,
+	successMessage: string,
+	cancelMessage: string,
+	failureLabel: string,
+) {
+	try {
+		await command();
+		message.value = successMessage;
+	} catch (error) {
+		if (isLauncherErrorKind(error, "gamePath")) {
+			try {
+				const selected = await promptForGamePath();
+				if (selected) {
+					await command();
+					message.value = successMessage;
+					return;
+				}
+				message.value = cancelMessage;
+			} catch (promptError) {
+				message.value = `${failureLabel}: ${formatError(promptError)}`;
+			}
+			return;
+		}
+		message.value = `${failureLabel}: ${formatError(error)}`;
+	}
 }
 
 onMounted(async () => {

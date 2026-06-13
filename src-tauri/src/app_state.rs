@@ -141,14 +141,14 @@ mod tests {
         let app_state = AppState::new_with_paths(paths).expect("app state");
         let status = app_state.status.lock().expect("status");
 
-        assert_eq!(status.game.known, false);
+        assert!(!status.game.known);
         assert_eq!(status.game.path, None);
         assert_eq!(status.game.installed_version, None);
-        assert_eq!(status.game.update_available, false);
-        assert_eq!(status.mod_status.installed, false);
+        assert!(!status.game.update_available);
+        assert!(!status.mod_status.installed);
         assert_eq!(status.mod_status.installed_version, None);
         assert_eq!(status.mod_status.latest_version, None);
-        assert_eq!(status.mod_status.update_available, false);
+        assert!(!status.mod_status.update_available);
         assert_eq!(status.mod_status.channel, ModChannel::Prerelease);
         assert_eq!(status.mod_status.launch_mode, LaunchMode::WindowsProxyDll);
     }
