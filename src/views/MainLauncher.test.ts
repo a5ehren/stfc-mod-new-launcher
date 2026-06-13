@@ -160,6 +160,21 @@ describe("MainLauncher", () => {
 		);
 	});
 
+	it("does not overwrite failed game updates with a success message", async () => {
+		vi.mocked(updateGame).mockRejectedValueOnce(new Error("network down"));
+
+		const wrapper = mount(MainLauncher);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		await wrapper
+			.findAllComponents(LcarsButton)
+			.find((button) => button.text() === "Update Game")
+			?.trigger("click");
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		expect(wrapper.text()).toContain("Update failed: Error: network down");
+		expect(wrapper.text()).not.toContain("Game update started");
+	});
+
 	it("prompts for a game folder when launch reports an unknown path", async () => {
 		vi.mocked(getLauncherStatus).mockResolvedValueOnce({
 			game: {
@@ -279,6 +294,6 @@ describe("MainLauncher", () => {
 
 		expect(open).toHaveBeenCalled();
 		expect(setGamePath).toHaveBeenCalledWith("/game");
-		expect(wrapper.text()).toContain("Game update started");
+		expect(wrapper.text()).toContain("Game update complete");
 	});
 });

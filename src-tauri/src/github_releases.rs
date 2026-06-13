@@ -1,12 +1,9 @@
 use crate::errors::{LauncherError, LauncherResult};
 use crate::models::{ModChannel, Platform};
 use serde::Deserialize;
-use std::env;
 
 const STFC_MOD_RELEASES_URL: &str = "https://api.github.com/repos/netniV/stfc-mod/releases";
 const GITHUB_API_VERSION: &str = "2022-11-28";
-// Prefer the launcher-specific token when both are present.
-const GITHUB_TOKEN_ENV_VARS: &[&str] = &["STFC_GITHUB_TOKEN", "GITHUB_TOKEN"];
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct GitHubRelease {
@@ -81,33 +78,17 @@ async fn fetch_releases_from(
     client: &reqwest::Client,
     url: &str,
 ) -> LauncherResult<Vec<GitHubRelease>> {
-    fetch_releases_from_with_token(client, url, github_token().as_deref()).await
-}
-
-async fn fetch_releases_from_with_token(
-    client: &reqwest::Client,
-    url: &str,
-    token: Option<&str>,
-) -> LauncherResult<Vec<GitHubRelease>> {
-    let request = client
+    let response = client
         .get(url)
         .header(reqwest::header::USER_AGENT, "stfc-mod-launcher")
         .header(reqwest::header::ACCEPT, "application/vnd.github+json")
-        .header("X-GitHub-Api-Version", GITHUB_API_VERSION);
-    let request = if let Some(token) = token {
-        request.bearer_auth(token)
-    } else {
-        request
-    };
-
-    let response =
-        request
-            .send()
-            .await
-            .map_err(|source| crate::errors::LauncherError::Network {
-                context: "fetching STFC mod releases".into(),
-                source,
-            })?;
+        .header("X-GitHub-Api-Version", GITHUB_API_VERSION)
+        .send()
+        .await
+        .map_err(|source| crate::errors::LauncherError::Network {
+            context: "fetching STFC mod releases".into(),
+            source,
+        })?;
 
     if !response.status().is_success() {
         let status = response.status();
@@ -150,13 +131,6 @@ async fn fetch_releases_from_with_token(
             context: "parsing STFC mod releases response".into(),
             source,
         })
-}
-
-fn github_token() -> Option<String> {
-    GITHUB_TOKEN_ENV_VARS
-        .iter()
-        .find_map(|name| env::var(name).ok())
-        .filter(|value| !value.trim().is_empty())
 }
 
 #[cfg(test)]
@@ -450,12 +424,8 @@ mod tests {
         );
         let client = reqwest::Client::new();
 
-        let releases = tauri::async_runtime::block_on(fetch_releases_from_with_token(
-            &client,
-            &server.url,
-            None,
-        ))
-        .expect("releases");
+        let releases = tauri::async_runtime::block_on(fetch_releases_from(&client, &server.url))
+            .expect("releases");
         let request = server.request();
 
         assert_eq!(releases.len(), 2);
@@ -466,7 +436,7 @@ mod tests {
     }
 
     #[test]
-    fn fetch_releases_sends_bearer_token_when_configured() {
+    fn fetch_releases_does_not_send_authorization_header() {
         let server = TestServer::respond_once(
             "/repos/netniV/stfc-mod/releases",
             "200 OK",
@@ -474,15 +444,11 @@ mod tests {
         );
         let client = reqwest::Client::new();
 
-        let _ = tauri::async_runtime::block_on(fetch_releases_from_with_token(
-            &client,
-            &server.url,
-            Some("secret-token"),
-        ))
-        .expect("releases");
+        let _ = tauri::async_runtime::block_on(fetch_releases_from(&client, &server.url))
+            .expect("releases");
         let request = server.request();
 
-        assert!(request.contains("authorization: Bearer secret-token\r\n"));
+        assert!(!request.contains("authorization:"));
     }
 
     #[test]
@@ -490,11 +456,7 @@ mod tests {
         let server = TestServer::respond_once("/releases", "500 Internal Server Error", "[]");
         let client = reqwest::Client::new();
 
-        let result = tauri::async_runtime::block_on(fetch_releases_from_with_token(
-            &client,
-            &server.url,
-            None,
-        ));
+        let result = tauri::async_runtime::block_on(fetch_releases_from(&client, &server.url));
         server.request();
 
         match result {
@@ -511,11 +473,7 @@ mod tests {
         let server = TestServer::respond_once("/releases", "200 OK", "not json");
         let client = reqwest::Client::new();
 
-        let result = tauri::async_runtime::block_on(fetch_releases_from_with_token(
-            &client,
-            &server.url,
-            None,
-        ));
+        let result = tauri::async_runtime::block_on(fetch_releases_from(&client, &server.url));
         server.request();
 
         match result {
@@ -535,12 +493,8 @@ mod tests {
         );
         let client = reqwest::Client::new();
 
-        let releases = tauri::async_runtime::block_on(fetch_releases_from_with_token(
-            &client,
-            &server.url,
-            None,
-        ))
-        .expect("releases");
+        let releases = tauri::async_runtime::block_on(fetch_releases_from(&client, &server.url))
+            .expect("releases");
         server.request();
 
         assert_eq!(releases.len(), 2);

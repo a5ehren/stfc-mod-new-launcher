@@ -89,14 +89,16 @@ async function promptForGamePath() {
 
 async function updateGame() {
 	message.value = "Checking for game update";
-	await runCommandWithGamePathFallback(
+	const updated = await runCommandWithGamePathFallback(
 		updateGameCommand,
-		"Game update started",
+		"Game update complete",
 		"Update cancelled: no game folder selected",
 		"Update failed",
 	);
-	await refresh();
-	message.value = "Game update started";
+	if (updated) {
+		await refresh();
+		message.value = "Game update complete";
+	}
 }
 
 async function updateMod() {
@@ -135,6 +137,7 @@ async function runCommandWithGamePathFallback(
 	try {
 		await command();
 		message.value = successMessage;
+		return true;
 	} catch (error) {
 		if (isLauncherErrorKind(error, "gamePath")) {
 			try {
@@ -142,15 +145,16 @@ async function runCommandWithGamePathFallback(
 				if (selected) {
 					await command();
 					message.value = successMessage;
-					return;
+					return true;
 				}
 				message.value = cancelMessage;
 			} catch (promptError) {
 				message.value = `${failureLabel}: ${formatError(promptError)}`;
 			}
-			return;
+			return false;
 		}
 		message.value = `${failureLabel}: ${formatError(error)}`;
+		return false;
 	}
 }
 
