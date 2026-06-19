@@ -20,7 +20,7 @@
 		"check": "biome check && cd src-tauri && cargo fmt --check && cargo clippy --all-targets -- -D warnings"
 	},
 	"dependencies": {
-		"@tauri-apps/api": "^2.11.0",
+		"@tauri-apps/api": "^2.11.1",
 		"@tauri-apps/plugin-dialog": "^2.7.1",
 		"@tauri-apps/plugin-fs": "~2.5.1",
 		"@tauri-apps/plugin-opener": "^2.5.4",
@@ -40,8 +40,8 @@
 		"jsdom": "^29.1.1",
 		"typescript": "~6.0.3",
 		"vite": "^8.0.16",
-		"vitest": "^4.1.8",
-		"vue-tsc": "^3.3.4"
+		"vitest": "^4.1.9",
+		"vue-tsc": "^3.3.5"
 	},
-	"packageManager": "pnpm@11.5.3"
+	"packageManager": "pnpm@11.8.0"
 }
