@@ -199,17 +199,26 @@ pub async fn launch_game(app: tauri::AppHandle, state: State<'_, AppState>) -> C
         })
         .await?;
     }
+    let wine_runner = crate::launch::resolve_wine_runner();
     let plan = crate::launch::build_launch_plan(
         platform,
         &game_path,
         &mod_library,
         launch_mode,
+        &wine_runner,
         prime_exe.as_deref(),
     )
     .map_err(ErrorDto::from)?;
     state
         .diagnostics
-        .info("launch", &format!("launching with mode {:?}", launch_mode))
+        .info(
+            "launch",
+            &format!(
+                "launching with mode {:?} via {}",
+                launch_mode,
+                wine_runner.label()
+            ),
+        )
         .map_err(ErrorDto::from)?;
     emit_progress(
         &app,
@@ -655,7 +664,10 @@ async fn resolve_game_path(
         // forward so build_launch_plan does not have to scan the prefix again.
         match platform {
             crate::models::Platform::LinuxWine => {
-                if let Some(prime_exe) = crate::game_locator::find_prime_exe_in_wine_prefix(&path) {
+                // game_path is the game folder (the directory containing
+                // prime.exe). Re-validate it; prime.exe lives directly inside.
+                if crate::game_locator::is_valid_game_root(&path, platform) {
+                    let prime_exe = path.join("prime.exe");
                     return Ok(ResolvedGame {
                         root: path,
                         prime_exe: Some(prime_exe),

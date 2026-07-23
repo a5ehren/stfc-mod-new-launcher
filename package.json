@@ -5,6 +5,7 @@
 	"type": "module",
 	"scripts": {
 		"dev": "vite",
+		"dev:linux": "GDK_BACKEND=x11 pnpm tauri dev",
 		"build": "vue-tsc --noEmit && vite build",
 		"build:macos": "pnpm tauri build --bundles dmg --target universal-apple-darwin",
 		"build:windows": "pnpm exec tauri build --bundles msi --ci",
@@ -21,27 +22,27 @@
 	},
 	"dependencies": {
 		"@tauri-apps/api": "^2.11.1",
-		"@tauri-apps/plugin-dialog": "^2.7.1",
+		"@tauri-apps/plugin-dialog": "^2.7.2",
 		"@tauri-apps/plugin-fs": "~2.5.1",
 		"@tauri-apps/plugin-opener": "^2.5.4",
 		"@tauri-apps/plugin-process": "^2.3.1",
 		"@tauri-apps/plugin-updater": "^2.10.1",
-		"toml": "^4.1.1",
-		"vue": "^3.5.39"
+		"toml": "^5.0.0",
+		"vue": "^3.5.40"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.5.1",
 		"@tauri-apps/cli": "^2.11.4",
-		"@types/node": "^24.13.2",
-		"@vitejs/plugin-vue": "^6.0.7",
+		"@types/node": "^24.13.3",
+		"@vitejs/plugin-vue": "^6.0.8",
 		"@vue/test-utils": "^2.4.11",
 		"git-format-staged": "^4.0.1",
 		"husky": "^9.1.7",
 		"jsdom": "^29.1.1",
 		"typescript": "~6.0.3",
-		"vite": "^8.1.0",
-		"vitest": "^4.1.9",
-		"vue-tsc": "^3.3.5"
+		"vite": "^8.1.5",
+		"vitest": "^4.1.10",
+		"vue-tsc": "^3.3.8"
 	},
-	"packageManager": "pnpm@11.9.0+sha512.bd682d5d03fe525ef7c9fd6780c6884d1e756ac4c9c9fe00c538782824310dcf90e3ddc4f53835f06dfaebd5085e41855e0bcbb3b60de2ac5bbab89e5036f03b"
+	"packageManager": "pnpm@11.17.0"
 }

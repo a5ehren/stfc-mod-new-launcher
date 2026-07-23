@@ -209,39 +209,24 @@ pub fn is_valid_game_root(path: &Path, platform: Platform) -> bool {
             .join("Star Trek Fleet Command.app/Contents/MacOS/Star Trek Fleet Command")
             .is_file(),
         Platform::Windows => path.join("prime.exe").is_file(),
-        Platform::LinuxWine => {
-            // For WINE, the game root is a WINE prefix containing drive_c/.../prime.exe
-            // Common locations:
-            // - Steam: <prefix>/drive_c/Program Files (x86)/Steam/steamapps/common/Star Trek Fleet Command/prime.exe
-            // - Lutris: <prefix>/drive_c/Games/STFC/prime.exe or similar
-            // - Bottles: <prefix>/drive_c/Program Files/STFC/prime.exe
-            // We check for prime.exe anywhere under drive_c
-            find_prime_exe_in_wine_prefix(path).is_some()
-        }
+        // On Linux/WINE the user selects the game folder (the directory that
+        // contains prime.exe), exactly as on Windows. The WINE prefix is derived
+        // from it at launch time by walking up to the `drive_c` ancestor, so
+        // validation only needs to confirm prime.exe is present here.
+        Platform::LinuxWine => path.join("prime.exe").is_file(),
     }
 }
 
-pub fn find_prime_exe_in_wine_prefix(wine_prefix: &Path) -> Option<PathBuf> {
-    let drive_c = wine_prefix.join("drive_c");
-    if !drive_c.is_dir() {
-        return None;
-    }
-
-    let mut pending = vec![drive_c];
-    while let Some(dir) = pending.pop() {
-        if let Ok(entries) = std::fs::read_dir(dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_dir() {
-                    pending.push(path);
-                } else if path
-                    .file_name()
-                    .map(|name| name == "prime.exe")
-                    .unwrap_or(false)
-                {
-                    return Some(path);
-                }
-            }
+/// Derives the WINE prefix for a Linux/WINE game install by walking up from the
+/// game folder to the nearest ancestor directory that contains a `drive_c`
+/// directory. The user selects the game folder (where `prime.exe` lives, e.g.
+/// `<prefix>/drive_c/Games/Star Trek Fleet Command/.../default/game`); the WINE
+/// prefix itself (`<prefix>`, which holds `drive_c`, `system.reg`, etc.) is
+/// needed only for `WINEPREFIX` at launch time.
+pub fn find_wine_prefix(game_folder: &Path) -> Option<PathBuf> {
+    for ancestor in game_folder.ancestors() {
+        if ancestor.join("drive_c").is_dir() {
+            return Some(ancestor.to_path_buf());
         }
     }
     None
@@ -561,20 +546,11 @@ mod tests {
     }
 
     #[test]
-    fn validates_linux_wine_game_root_with_prime_exe_under_drive_c() {
+    fn validates_linux_wine_game_root_by_prime_exe_file() {
         let root = tempfile::tempdir().expect("tempdir");
         let game_root = root.path();
         std::fs::write(game_root.join(".version"), "&game=168").expect("version");
-        std::fs::create_dir_all(
-            game_root
-                .join("drive_c/Program Files (x86)/Steam/steamapps/common/Star Trek Fleet Command"),
-        )
-        .expect("wine dirs");
-        std::fs::write(
-            game_root.join("drive_c/Program Files (x86)/Steam/steamapps/common/Star Trek Fleet Command/prime.exe"),
-            "",
-        )
-        .expect("prime exe");
+        std::fs::write(game_root.join("prime.exe"), "").expect("prime exe");
 
         assert!(is_valid_game_root(
             game_root,
@@ -583,43 +559,10 @@ mod tests {
     }
 
     #[test]
-    fn validates_linux_wine_game_root_with_prime_exe_in_lutris_layout() {
+    fn rejects_linux_wine_game_root_when_prime_exe_is_directory() {
         let root = tempfile::tempdir().expect("tempdir");
         let game_root = root.path();
-        std::fs::write(game_root.join(".version"), "&game=168").expect("version");
-        std::fs::create_dir_all(game_root.join("drive_c/Games/STFC")).expect("lutris dirs");
-        std::fs::write(game_root.join("drive_c/Games/STFC/prime.exe"), "").expect("prime exe");
-
-        assert!(is_valid_game_root(
-            game_root,
-            crate::models::Platform::LinuxWine
-        ));
-    }
-
-    #[test]
-    fn validates_linux_wine_game_root_with_deep_prime_exe() {
-        let root = tempfile::tempdir().expect("tempdir");
-        let game_root = root.path();
-        let mut nested = game_root.join("drive_c");
-        for segment in 0..64 {
-            nested = nested.join(format!("level-{segment}"));
-        }
-        std::fs::create_dir_all(&nested).expect("deep wine dirs");
-        std::fs::write(nested.join("prime.exe"), "").expect("prime exe");
-
-        assert!(is_valid_game_root(
-            game_root,
-            crate::models::Platform::LinuxWine
-        ));
-    }
-
-    #[test]
-    fn rejects_linux_wine_game_root_without_drive_c() {
-        let root = tempfile::tempdir().expect("tempdir");
-        let game_root = root.path();
-        std::fs::write(game_root.join(".version"), "&game=168").expect("version");
-        std::fs::create_dir_all(game_root.join("Program Files/STFC")).expect("no drive_c");
-        std::fs::write(game_root.join("Program Files/STFC/prime.exe"), "").expect("prime exe");
+        std::fs::create_dir(game_root.join("prime.exe")).expect("prime exe dir");
 
         assert!(!is_valid_game_root(
             game_root,
@@ -632,11 +575,39 @@ mod tests {
         let root = tempfile::tempdir().expect("tempdir");
         let game_root = root.path();
         std::fs::write(game_root.join(".version"), "&game=168").expect("version");
-        std::fs::create_dir_all(game_root.join("drive_c/Program Files/STFC")).expect("wine dirs");
 
         assert!(!is_valid_game_root(
             game_root,
             crate::models::Platform::LinuxWine
         ));
+    }
+
+    #[test]
+    fn find_wine_prefix_derives_prefix_from_game_folder() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let prefix = root.path().join("heroic-prefix");
+        // The prefix holds drive_c plus the usual WINE prefix markers; the game
+        // folder is nested deep inside drive_c, exactly as Heroic lays it out:
+        // <prefix>/drive_c/Games/.../default/game/prime.exe
+        let game_folder = prefix
+            .join("drive_c/Games/Star Trek Fleet Command/Star Trek Fleet Command/default/game");
+        std::fs::create_dir_all(&game_folder).expect("game dirs");
+        std::fs::write(game_folder.join("prime.exe"), "").expect("prime exe");
+        std::fs::write(prefix.join("system.reg"), "").expect("prefix marker");
+
+        assert_eq!(
+            find_wine_prefix(&game_folder).as_deref(),
+            Some(prefix.as_path())
+        );
+    }
+
+    #[test]
+    fn find_wine_prefix_returns_none_without_drive_c_ancestor() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let game_folder = root.path().join("plain/game");
+        std::fs::create_dir_all(&game_folder).expect("game dirs");
+        std::fs::write(game_folder.join("prime.exe"), "").expect("prime exe");
+
+        assert_eq!(find_wine_prefix(&game_folder), None);
     }
 }
