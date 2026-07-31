@@ -31,15 +31,15 @@
 		"vue": "^3.5.40"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "2.5.1",
+		"@biomejs/biome": "2.5.6",
 		"@tauri-apps/cli": "^2.11.4",
 		"@types/node": "^24.13.3",
 		"@vitejs/plugin-vue": "^6.0.8",
 		"@vue/test-utils": "^2.4.11",
 		"git-format-staged": "^4.0.1",
 		"husky": "^9.1.7",
-		"jsdom": "^29.1.1",
-		"typescript": "~6.0.3",
+		"jsdom": "^30.0.1",
+		"typescript": "~7.0.2",
 		"vite": "^8.1.5",
 		"vitest": "^4.1.10",
 		"vue-tsc": "^3.3.8"
