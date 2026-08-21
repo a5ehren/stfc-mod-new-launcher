@@ -15,6 +15,10 @@ jobs:
 
       - name: Build macOS universal bundle
         uses: ./.github/actions/tauri-build
+        env:
+          # Keep PR dmg output faithful to release builds (see release.yml):
+          # CI=true makes tauri-bundler skip DMG window customization.
+          CI: "false"
         with:
           rust_targets: aarch64-apple-darwin,x86_64-apple-darwin
           build_command: pnpm build:macos

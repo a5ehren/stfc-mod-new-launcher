@@ -23,6 +23,12 @@ jobs:
 
       - name: Build macOS universal bundle
         uses: ./.github/actions/tauri-build
+        env:
+          # tauri-bundler passes --skip-jenkins to bundle_dmg.sh when CI=true,
+          # which skips the .DS_Store customization and drops the DMG
+          # background, icon positions, and window size.
+          # https://github.com/tauri-apps/tauri-action/issues/740
+          CI: "false"
         with:
           rust_targets: aarch64-apple-darwin,x86_64-apple-darwin
           build_command: pnpm build:macos
