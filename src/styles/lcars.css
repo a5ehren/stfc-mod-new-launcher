@@ -1,20 +1,35 @@
 @font-face {
 	font-family: "Antonio";
-	src: url("../assets/lcars/Antonio-Regular.ttf") format("truetype");
-	font-weight: 100 700;
+	font-weight: 400;
+	src:
+		url("../assets/lcars/Antonio-Regular.woff2") format("woff2"),
+		url("../assets/lcars/Antonio-Regular.woff") format("woff");
+	font-display: swap;
+}
+
+@font-face {
+	font-family: "Antonio";
+	font-weight: 700;
+	src:
+		url("../assets/lcars/Antonio-Bold.woff2") format("woff2"),
+		url("../assets/lcars/Antonio-Bold.woff") format("woff");
 	font-display: swap;
 }
 
 :root {
 	color-scheme: dark;
+
+	/* LCARS Classic v26 palette (thelcars.com) */
 	--lcars-black: #000;
-	--lcars-violet: #c9f;
-	--lcars-orange: #f80;
-	--lcars-tan: #ffaa90;
-	--lcars-blue: #89f;
-	--lcars-red: #c44;
-	--lcars-gold: #fa0;
-	--lcars-text: #c9f;
+	--lcars-violet: #baa4e5; /* african-violet */
+	--lcars-orange: #eb943a;
+	--lcars-tan: #d29b7f; /* almond */
+	--lcars-blue: #89f; /* bluey */
+	--lcars-red: #cf4f4f;
+	--lcars-gold: #edb378; /* barley */
+	--lcars-butterscotch: #ea9c72;
+
+	--lcars-text: var(--lcars-violet);
 	--lcars-radius: 72px;
 	font-family: "Antonio", "Arial Narrow", sans-serif;
 }

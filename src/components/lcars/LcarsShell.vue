@@ -65,12 +65,12 @@ withDefaults(
   border-radius: var(--lcars-radius) 0 0 0;
 }
 .panel-fill {
-  background: var(--lcars-red);
+  background: var(--lcars-tan);
   border-top: 8px solid #000;
   border-bottom: 8px solid #000;
 }
 .panel-bottom {
-  background: var(--lcars-orange);
+  background: var(--lcars-red);
   border-radius: 0 0 0 var(--lcars-radius);
 }
 .content-frame {
