@@ -1,6 +1,6 @@
 import type { ConfigDefinition } from "../structure";
 
-const experimental_feature = "[EXPERIMENTAL] ";
+const experimental_feature = "⚠️ EXPERIMENTAL: ";
 
 export const uiDefinitions: ConfigDefinition[] = [
 	{
@@ -26,6 +26,13 @@ export const uiDefinitions: ConfigDefinition[] = [
 	},
 	{
 		group: "UI",
+		key: "auto_open_bulk_claim_flyout",
+		label: "Auto Open Bulk Claim Flyout",
+		type: "checkbox",
+		description: "Open the bulk gift claim flyout automatically",
+	},
+	{
+		group: "UI",
 		key: "disable_move_keys",
 		label: "Disable Movement Keys",
 		type: "checkbox",
@@ -40,11 +47,20 @@ export const uiDefinitions: ConfigDefinition[] = [
 	},
 	{
 		group: "UI",
-		subgroup: "Chat",
-		key: "disable_galaxy_chat",
-		label: "Disable Galaxy Chat",
+		subgroup: "Auto Confirm",
+		key: "auto_confirm_ft_upgrade",
+		label: "Auto Confirm Forbidden Tech Upgrades",
 		type: "checkbox",
-		description: "Change to true to remove Galaxy Chat from the game",
+		description: "Whether to bypass the Forbidden Tech upgrade screen",
+	},
+	{
+		group: "UI",
+		subgroup: "Auto Confirm",
+		key: "auto_confirm_instant_warp",
+		label: "Auto Confirm Instant Warp",
+		type: "dropdown",
+		options: ["none", "warp", "jump"],
+		description: "Whether to automatically warp, jump or display the dialog",
 	},
 	{
 		group: "UI",
@@ -53,6 +69,14 @@ export const uiDefinitions: ConfigDefinition[] = [
 		label: "Disable Veil Chat",
 		type: "checkbox",
 		description: "Change to true to remove Veil Chat from the game",
+	},
+	{
+		group: "UI",
+		subgroup: "Chat",
+		key: "disable_galaxy_chat",
+		label: "Disable Galaxy Chat",
+		type: "checkbox",
+		description: "Change to true to remove Galaxy Chat from the game",
 	},
 	{
 		group: "UI",
@@ -94,6 +118,60 @@ export const uiDefinitions: ConfigDefinition[] = [
 		type: "banner",
 		description:
 			"Specifies types of banners you don't want to see (comma separated)",
+	},
+	{
+		group: "UI",
+		subgroup: "Banners",
+		key: "notify_banner_types",
+		label: "Notify Banner Types",
+		type: "banner",
+		description:
+			"Specifies banner types that should trigger notifications (comma separated)",
+	},
+	{
+		group: "UI",
+		subgroup: "HUD",
+		key: "hud_daily_goals",
+		label: "Daily Goals",
+		type: "dropdown",
+		options: ["auto", "show", "hide"],
+		description: "HUD visibility mode: auto, show, or hide",
+	},
+	{
+		group: "UI",
+		subgroup: "HUD",
+		key: "hud_field_training",
+		label: "Field Training",
+		type: "dropdown",
+		options: ["auto", "show", "hide"],
+		description: "HUD visibility mode: auto, show, or hide",
+	},
+	{
+		group: "UI",
+		subgroup: "HUD",
+		key: "hud_missions",
+		label: "Missions",
+		type: "dropdown",
+		options: ["auto", "show", "hide"],
+		description: "HUD visibility mode: auto, show, or hide",
+	},
+	{
+		group: "UI",
+		subgroup: "HUD",
+		key: "hud_outposts",
+		label: "Outposts",
+		type: "dropdown",
+		options: ["auto", "show", "hide"],
+		description: "HUD visibility mode: auto, show, or hide",
+	},
+	{
+		group: "UI",
+		subgroup: "HUD",
+		key: "hud_q_trials",
+		label: "Q Trials",
+		type: "dropdown",
+		options: ["auto", "show", "hide"],
+		description: "HUD visibility mode: auto, show, or hide",
 	},
 	{
 		group: "UI",
@@ -139,6 +217,17 @@ export const uiDefinitions: ConfigDefinition[] = [
 		type: "checkbox",
 		description:
 			"Set to true to always show the rewards for selected ships/stations",
+	},
+	{
+		group: "UI",
+		subgroup: "Previews",
+		key: "cargo_significant_decimals",
+		label: "Cargo Significant Decimals",
+		type: "number",
+		min: 0,
+		max: 6,
+		step: 1,
+		description: "Decimal places used for abbreviated cargo values",
 	},
 	{
 		group: "UI",

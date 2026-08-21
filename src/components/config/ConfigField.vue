@@ -25,9 +25,9 @@ const sliderValue = computed(() =>
 );
 
 function update(event: Event) {
-	const target = event.target as HTMLInputElement;
+	const target = event.target as HTMLInputElement | HTMLSelectElement;
 	if (props.definition.type === "checkbox") {
-		emit("update:modelValue", target.checked);
+		emit("update:modelValue", (target as HTMLInputElement).checked);
 	} else if (
 		props.definition.type === "number" ||
 		props.definition.type === "slider"
@@ -59,6 +59,19 @@ function update(event: Event) {
         @input="update" />
       <output>{{ sliderValue }}</output>
     </div>
+    <select
+      v-else-if="definition.type === 'dropdown'"
+      class="dropdown-field"
+      :title="definition.description ?? definition.label ?? String(definition.key)"
+      :value="textValue"
+      @change="update">
+      <option
+        v-for="option in definition.options ?? []"
+        :key="option"
+        :value="option">
+        {{ option }}
+      </option>
+    </select>
     <input
       v-else-if="definition.type === 'number'"
       type="number"
@@ -96,12 +109,16 @@ output {
   min-width: 3ch;
   text-align: right;
 }
-input {
+input,
+select {
   background: #111;
   border: 1px solid var(--lcars-violet);
   color: var(--lcars-tan);
   padding: 6px 8px;
   font-size: 16px;
+}
+select.dropdown-field {
+  text-transform: capitalize;
 }
 input[type="checkbox"] {
   width: 22px;

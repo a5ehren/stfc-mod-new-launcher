@@ -29,7 +29,7 @@ const sections = [
 	{
 		key: "shortcuts" as const,
 		label: "Keyboard Shortcuts",
-		description: "Make each shortcut your own using examples on our github",
+		description: "Make each shortcut your own using examples on our GitHub",
 	},
 	{
 		key: "sync" as const,
@@ -51,13 +51,13 @@ const sections = [
 		key: "config" as const,
 		label: "Configuration",
 		description:
-			"⚠️⚠️⚠️ DEVELOPER: These settings are used by developers, you shouldn't be touching them!",
+			"⚠️⚠️⚠️ DEVELOPER: These settings are used by developers; you shouldn't be touching them!",
 	},
 	{
 		key: "patches" as const,
 		label: "Patches",
 		description:
-			"⚠️⚠️⚠️ SUPPORT: Yeah, don't mess with these unless asked to by the Community Mod support. These should all be enabled by default",
+			"⚠️⚠️⚠️ SUPPORT: Don't change these unless asked by Community Mod support. They should all be enabled by default.",
 	},
 ] as const;
 

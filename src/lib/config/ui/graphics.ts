@@ -35,14 +35,6 @@ export const graphicsDefinitions: ConfigDefinition[] = [
 	},
 	{
 		group: "Graphics",
-		subgroup: "Options",
-		key: "show_all_resolutions",
-		label: "Show All Resolutions",
-		type: "checkbox",
-		description: "To enable additional resolution options set this to true",
-	},
-	{
-		group: "Graphics",
 		subgroup: "Loader",
 		key: "loader_enabled",
 		label: "Enable Loader Screen",
@@ -61,11 +53,50 @@ export const graphicsDefinitions: ConfigDefinition[] = [
 	{
 		group: "Graphics",
 		subgroup: "Loader",
+		key: "loader_transition_black",
+		label: "Use Black Transition",
+		type: "checkbox",
+		description:
+			"Use a black background instead of the custom image during transitions",
+	},
+	{
+		group: "Graphics",
+		subgroup: "Loader",
+		key: "loader_tip_enabled",
+		label: "Show Loader Tip",
+		type: "checkbox",
+		description: "Show the custom tip on the loading screen",
+	},
+	{
+		group: "Graphics",
+		subgroup: "Loader",
 		key: "loader_image",
 		label: "Loader Image Path",
 		type: "textbox",
 		description:
 			"Path to the custom loading screen image (leave blank for embedded image)",
+	},
+	{
+		group: "Graphics",
+		subgroup: "Loader",
+		key: "loader_logo_scale",
+		label: "Loader Logo Scale",
+		type: "slider",
+		min: 0.1,
+		max: 3,
+		step: 0.1,
+		description: "Multiplier applied to the logo size on the loading screen",
+	},
+	{
+		group: "Graphics",
+		subgroup: "Display",
+		key: "fr_scale",
+		label: "Frame Rate Scale",
+		type: "slider",
+		min: 0.5,
+		max: 4,
+		step: 0.1,
+		description: "Frame-rate scaling factor",
 	},
 	{
 		group: "Graphics",
@@ -90,6 +121,18 @@ export const graphicsDefinitions: ConfigDefinition[] = [
 		step: 0.01,
 		description:
 			"This specifies the amount to adjust the scale by, 0.05 being default",
+	},
+	{
+		group: "Graphics",
+		subgroup: "Display",
+		key: "ui_scale_ship",
+		label: "UI Ship Scale",
+		type: "slider",
+		min: 0.1,
+		max: 20.0,
+		step: 0.05,
+		description:
+			"This specifies the amount to scale the ship models in System View, 1.0 being default",
 	},
 	{
 		group: "Graphics",

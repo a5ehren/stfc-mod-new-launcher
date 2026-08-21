@@ -58,8 +58,11 @@ export interface GraphicsConfiguration {
 	keyboard_zoom_speed: number;
 	loader_enabled: boolean;
 	loader_transition: boolean;
+	loader_transition_black: boolean;
 	loader_image: string;
-	show_all_resolutions: boolean;
+	loader_logo_scale: number;
+	loader_tip_enabled: boolean;
+	fr_scale: number;
 	system_pan_momentum_falloff: number;
 	system_pan_momentum: number;
 	system_zoom_preset_1: number;
@@ -70,6 +73,7 @@ export interface GraphicsConfiguration {
 	transition_time: number;
 	ui_scale: number;
 	ui_scale_adjust: number;
+	ui_scale_ship: number;
 	ui_scale_viewer: number;
 	use_presets_as_default: boolean;
 	zoom: number;
@@ -80,18 +84,23 @@ export interface PatchesConfiguration {
 	bufffixhooks: boolean;
 	chatpatches: boolean;
 	freeresizehooks: boolean;
+	game_version: boolean;
 	hotkeyhooks: boolean;
-	improveresponsivenesshooks: boolean;
+	loadingscreenhooks: boolean;
+	transitionscreenhooks: boolean;
 	miscpatches: boolean;
 	objecttracker: boolean;
 	panhooks: boolean;
-	resolutionlistfix: boolean;
 	syncpatches: boolean;
 	tempcrashfixes: boolean;
 	testpatches: boolean;
 	toastbannerhooks: boolean;
 	uiscalehooks: boolean;
 	zoomhooks: boolean;
+	giftsbulkclaimhooks: boolean;
+	focussearch: boolean;
+	cargoformathooks: boolean;
+	officersorthooks: boolean;
 	[key: string]: unknown;
 }
 
@@ -126,6 +135,7 @@ export interface ShortcutsConfiguration {
 	select_ship6: string;
 	select_ship7: string;
 	select_ship8: string;
+	focus_search: string;
 	set_zoom_default: string;
 	set_zoom_preset1: string;
 	set_zoom_preset2: string;
@@ -166,10 +176,13 @@ export interface ShortcutsConfiguration {
 	toggle_cargo_hostile: string;
 	toggle_cargo_player: string;
 	toggle_cargo_station: string;
+	toggle_instant_warp: string;
 	toggle_preview_locate: string;
 	toggle_preview_recall: string;
 	ui_scaledown: string;
 	ui_scaleup: string;
+	ui_scaleshipdown: string;
+	ui_scaleshipup: string;
 	ui_scaleviewerdown: string;
 	ui_scaleviewerup: string;
 	zoom_in: string;
@@ -192,6 +205,9 @@ export interface ShortcutsConfiguration {
 export interface UiConfiguration {
 	always_skip_reveal_sequence: boolean;
 	auto_confirm_discovery: boolean;
+	auto_confirm_ft_upgrade: boolean;
+	auto_confirm_instant_warp: string;
+	auto_open_bulk_claim_flyout: boolean;
 	disable_escape_exit: boolean;
 	disable_first_popup: boolean;
 	disable_galaxy_chat: boolean;
@@ -201,6 +217,12 @@ export interface UiConfiguration {
 	disable_toast_banners: boolean;
 	disable_veil_chat: boolean;
 	disabled_banner_types: string;
+	hud_daily_goals: string;
+	hud_field_training: string;
+	hud_missions: string;
+	hud_outposts: string;
+	hud_q_trials: string;
+	notify_banner_types: string;
 	extend_donation_max: number;
 	extend_donation_slider: boolean;
 	show_armada_cargo: boolean;
@@ -208,6 +230,7 @@ export interface UiConfiguration {
 	show_hostile_cargo: boolean;
 	show_player_cargo: boolean;
 	show_station_cargo: boolean;
+	cargo_significant_decimals: number;
 	[key: string]: unknown;
 }
 

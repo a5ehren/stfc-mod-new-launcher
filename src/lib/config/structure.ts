@@ -15,11 +15,12 @@ export type ConfigDefinition = {
 	group?: string;
 	subgroup?: string;
 	label: string;
-	type: "checkbox" | "slider" | "number" | "textbox" | "banner";
+	type: "checkbox" | "slider" | "number" | "textbox" | "dropdown" | "banner";
+	options?: readonly string[];
 	min?: number;
 	max?: number;
 	step?: number;
-	description?: string; // <-- new
+	description?: string;
 	isGenerated?: boolean; // <-- for missing definitions
 	isHidden?: boolean;
 };

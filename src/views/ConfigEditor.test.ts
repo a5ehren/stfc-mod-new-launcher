@@ -40,7 +40,10 @@ describe("ConfigEditor", () => {
 		await tabs[1].trigger("click");
 		await new Promise((resolve) => setTimeout(resolve, 0));
 		expect(wrapper.text()).toContain("UI Scale");
-		expect(wrapper.find("output").text()).toBe("0.6");
+		const uiScaleField = wrapper
+			.findAll("label.config-field")
+			.find((field) => field.find("span").text() === "UI Scale");
+		expect(uiScaleField?.find("output").text()).toBe("0.6");
 
 		await wrapper.find("input[type='checkbox']").setValue(false);
 

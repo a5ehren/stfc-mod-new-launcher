@@ -26,6 +26,13 @@ export const patchesDefinitions: ConfigDefinition[] = [
 	{
 		group: "Patches",
 		subgroup: "Leave Well Alone",
+		key: "game_version",
+		label: "Game Version",
+		type: "checkbox",
+	},
+	{
+		group: "Patches",
+		subgroup: "Leave Well Alone",
 		key: "hotkeyhooks",
 		label: "Hotkey Hooks",
 		type: "checkbox",
@@ -33,8 +40,15 @@ export const patchesDefinitions: ConfigDefinition[] = [
 	{
 		group: "Patches",
 		subgroup: "Leave Well Alone",
-		key: "improveresponsivenesshooks",
-		label: "Improve Responsiveness Hooks",
+		key: "loadingscreenhooks",
+		label: "Loading Screen Hooks",
+		type: "checkbox",
+	},
+	{
+		group: "Patches",
+		subgroup: "Leave Well Alone",
+		key: "transitionscreenhooks",
+		label: "Transition Screen Hooks",
 		type: "checkbox",
 	},
 	{
@@ -56,13 +70,6 @@ export const patchesDefinitions: ConfigDefinition[] = [
 		subgroup: "Leave Well Alone",
 		key: "panhooks",
 		label: "Pan Hooks",
-		type: "checkbox",
-	},
-	{
-		group: "Patches",
-		subgroup: "Leave Well Alone",
-		key: "resolutionlistfix",
-		label: "Resolution List Fix",
 		type: "checkbox",
 	},
 	{
@@ -105,6 +112,34 @@ export const patchesDefinitions: ConfigDefinition[] = [
 		subgroup: "Leave Well Alone",
 		key: "zoomhooks",
 		label: "Zoom Hooks",
+		type: "checkbox",
+	},
+	{
+		group: "Patches",
+		subgroup: "Leave Well Alone",
+		key: "giftsbulkclaimhooks",
+		label: "Gifts Bulk Claim Hooks",
+		type: "checkbox",
+	},
+	{
+		group: "Patches",
+		subgroup: "Leave Well Alone",
+		key: "focussearch",
+		label: "Focus Search",
+		type: "checkbox",
+	},
+	{
+		group: "Patches",
+		subgroup: "Leave Well Alone",
+		key: "cargoformathooks",
+		label: "Cargo Format Hooks",
+		type: "checkbox",
+	},
+	{
+		group: "Patches",
+		subgroup: "Leave Well Alone",
+		key: "officersorthooks",
+		label: "Officer Sort Hooks",
 		type: "checkbox",
 	},
 ];

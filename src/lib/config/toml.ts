@@ -86,7 +86,15 @@ function writeSyncSections(
 	// --- Write [sync] (excluding targets)
 	const syncMain = { ...syncSection };
 	delete syncMain.targets;
-	str += writeSectionFromConfig("sync", syncMain, undefined);
+	str += writeSectionFromConfig(
+		"sync",
+		syncMain,
+		undefined,
+		undefined,
+		includeCommentSection,
+		includeCommentSubgroup,
+		includeCommentItem,
+	);
 
 	// --- Write [sync.targets.*] alphabetically
 	if (syncSection.targets && typeof syncSection.targets === "object") {
@@ -310,6 +318,7 @@ function findDefinition(
 function formatTomlValue(value: unknown, type: string | undefined): string {
 	switch (type) {
 		case "textbox":
+		case "dropdown":
 			return `"${String(value ?? "")
 				.replace(/\\/g, "\\\\")
 				.replace(/"/g, '\\"')}"`;
@@ -344,6 +353,7 @@ function getDefaultForType(type: ConfigDefinition["type"]) {
 		case "number":
 			return 0;
 		case "textbox":
+		case "dropdown":
 			return "";
 		default:
 			return null;

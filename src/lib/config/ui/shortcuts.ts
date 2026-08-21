@@ -1,6 +1,6 @@
 import type { ConfigDefinition } from "../structure";
 
-const experimental_feature = "[EXPERIMENTAL] ";
+const experimental_feature = "⚠️ EXPERIMENTAL: ";
 
 export const shortcutDefinitions: ConfigDefinition[] = [
 	// Queue & Primary
@@ -401,6 +401,22 @@ export const shortcutDefinitions: ConfigDefinition[] = [
 	{
 		group: "Shortcuts",
 		subgroup: "UI Scale",
+		key: "ui_scaleshipup",
+		label: "System Ship Scale Up",
+		type: "textbox",
+		description: "CTRL-PGUP",
+	},
+	{
+		group: "Shortcuts",
+		subgroup: "UI Scale",
+		key: "ui_scaleshipdown",
+		label: "System Ship Scale Down",
+		type: "textbox",
+		description: "CTRL-PGDOWN",
+	},
+	{
+		group: "Shortcuts",
+		subgroup: "UI Scale",
 		key: "ui_scaleviewerup",
 		label: "UI Viewer Scale Up",
 		type: "textbox",
@@ -642,6 +658,16 @@ export const shortcutDefinitions: ConfigDefinition[] = [
 	},
 	{
 		group: "Shortcuts",
+		subgroup: "Screens",
+		key: "focus_search",
+		label: "Focus Search",
+		type: "textbox",
+		description: "Focus the current screen's search field",
+	},
+
+	// Experimental
+	{
+		group: "Shortcuts",
 		subgroup: "Experimental",
 		key: "show_lookup",
 		label: "Show bookmark lookup screen",
@@ -721,6 +747,14 @@ export const shortcutDefinitions: ConfigDefinition[] = [
 		label: "Toggle Armada cargo preview",
 		type: "textbox",
 		description: "Whether to show armada cargo by default",
+	},
+	{
+		group: "Shortcuts",
+		subgroup: "Cargo & Locate",
+		key: "toggle_instant_warp",
+		label: "Toggle instant warp",
+		type: "textbox",
+		description: "Whether to automatically warp, jump or display the dialog",
 	},
 	{
 		group: "Shortcuts",
