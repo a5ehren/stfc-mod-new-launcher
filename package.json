@@ -37,7 +37,7 @@
 		"git-format-staged": "^4.0.2",
 		"husky": "^9.1.7",
 		"jsdom": "^30.0.1",
-		"typescript": "^5.9.3",
+		"typescript": "^7.0.2",
 		"vite": "^8.2.2",
 		"vitest": "^4.1.11",
 		"vue-tsc": "^3.3.10"
