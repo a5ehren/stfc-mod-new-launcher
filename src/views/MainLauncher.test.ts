@@ -17,6 +17,7 @@ vi.mock("@/lib/commands", () => ({
 			known: true,
 			path: "/game",
 			installedVersion: 168,
+			latestVersion: 169,
 			updateAvailable: true,
 		},
 		modStatus: {
@@ -38,11 +39,23 @@ vi.mock("@/lib/commands", () => ({
 	validateGamePath: vi.fn(),
 	updateGame: vi.fn(),
 	updateMod: vi.fn(),
+	checkModUpdate: vi.fn(async () => {
+		throw new Error("offline in tests");
+	}),
+	checkGameUpdate: vi.fn(async () => {
+		throw new Error("offline in tests");
+	}),
+	checkLauncherUpdate: vi.fn(async () => null),
+	installLauncherUpdate: vi.fn(async () => false),
 	onProgress: vi.fn(async () => vi.fn()),
 }));
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({
 	open: vi.fn(),
+}));
+
+vi.mock("@tauri-apps/plugin-process", () => ({
+	relaunch: vi.fn(),
 }));
 
 describe("MainLauncher", () => {
@@ -77,6 +90,7 @@ describe("MainLauncher", () => {
 				known: true,
 				path: "/game",
 				installedVersion: 168,
+				latestVersion: 169,
 				updateAvailable: false,
 			},
 			modStatus: {
@@ -103,6 +117,7 @@ describe("MainLauncher", () => {
 				known: true,
 				path: "/game",
 				installedVersion: 168,
+				latestVersion: 169,
 				updateAvailable: false,
 			},
 			modStatus: {
@@ -132,6 +147,7 @@ describe("MainLauncher", () => {
 				known: true,
 				path: "/game",
 				installedVersion: 168,
+				latestVersion: 169,
 				updateAvailable: false,
 			},
 			modStatus: {
@@ -181,6 +197,7 @@ describe("MainLauncher", () => {
 				known: false,
 				path: null,
 				installedVersion: null,
+				latestVersion: null,
 				updateAvailable: false,
 			},
 			modStatus: {
@@ -204,6 +221,7 @@ describe("MainLauncher", () => {
 			known: true,
 			path: "/game",
 			installedVersion: 168,
+			latestVersion: 169,
 			updateAvailable: false,
 		});
 		vi.mocked(setGamePath).mockResolvedValueOnce({
@@ -211,6 +229,7 @@ describe("MainLauncher", () => {
 				known: true,
 				path: "/game",
 				installedVersion: 168,
+				latestVersion: 169,
 				updateAvailable: false,
 			},
 			modStatus: {
@@ -241,6 +260,7 @@ describe("MainLauncher", () => {
 				known: false,
 				path: null,
 				installedVersion: null,
+				latestVersion: null,
 				updateAvailable: true,
 			},
 			modStatus: {
@@ -264,6 +284,7 @@ describe("MainLauncher", () => {
 			known: true,
 			path: "/game",
 			installedVersion: 168,
+			latestVersion: 169,
 			updateAvailable: false,
 		});
 		vi.mocked(setGamePath).mockResolvedValueOnce({
@@ -271,6 +292,7 @@ describe("MainLauncher", () => {
 				known: true,
 				path: "/game",
 				installedVersion: 168,
+				latestVersion: 169,
 				updateAvailable: false,
 			},
 			modStatus: {

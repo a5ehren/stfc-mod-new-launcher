@@ -1,11 +1,16 @@
 <script setup lang="ts">
 import { open } from "@tauri-apps/plugin-dialog";
+import { relaunch } from "@tauri-apps/plugin-process";
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import LcarsButton from "@/components/lcars/LcarsButton.vue";
 import LcarsShell from "@/components/lcars/LcarsShell.vue";
 import StatusStrip from "@/components/StatusStrip.vue";
 import {
+	checkGameUpdate,
+	checkLauncherUpdate,
+	checkModUpdate,
 	getLauncherStatus,
+	installLauncherUpdate,
 	launchGame as launchGameCommand,
 	onProgress,
 	openConfigEditor,
@@ -31,14 +36,66 @@ const warning = computed(() => {
 	if (!status.value) return "";
 	if (
 		status.value.game.updateAvailable ||
-		status.value.modStatus.updateAvailable
+		status.value.modStatus.updateAvailable ||
+		status.value.launcherUpdateAvailable
 	) {
 		return "Updates available";
 	}
 	return "";
 });
 
+type UpdateAction = {
+	key: string;
+	label: string;
+	tone: "gold" | "blue" | "red";
+	run: () => Promise<void>;
+};
+
+const updateActions = computed<UpdateAction[]>(() => {
+	const actions: UpdateAction[] = [];
+	if (status.value?.game.updateAvailable) {
+		actions.push({
+			key: "game",
+			label: "Update Game",
+			tone: "gold",
+			run: updateGame,
+		});
+	}
+	if (status.value?.modStatus.updateAvailable) {
+		actions.push({
+			key: "mod",
+			label: "Update Mod",
+			tone: "blue",
+			run: updateMod,
+		});
+	}
+	if (status.value?.launcherUpdateAvailable) {
+		actions.push({
+			key: "launcher",
+			label: "Update Launcher",
+			tone: "red",
+			run: updateLauncher,
+		});
+	}
+	return actions;
+});
+
+function updateEdge(index: number, total: number) {
+	if (total === 1) return "single";
+	if (index === 0) return "left";
+	if (index === total - 1) return "right";
+	return "middle";
+}
+
 async function refresh() {
+	// Reconcile game/mod/launcher status against remote release sources; each
+	// check is best-effort (offline, unknown game path) and falls back to the
+	// local snapshot.
+	await Promise.allSettled([
+		checkGameUpdate(),
+		checkModUpdate(),
+		checkLauncherUpdate(),
+	]);
 	status.value = await getLauncherStatus();
 	message.value = status.value.game.known
 		? "Game located"
@@ -112,10 +169,27 @@ async function updateMod() {
 	await refresh();
 }
 
+async function updateLauncher() {
+	message.value = "Downloading launcher update";
+	const installed = await installLauncherUpdate();
+	if (installed) {
+		message.value = "Launcher update installed; restarting";
+		await relaunch();
+	} else {
+		message.value = "Launcher is already up to date";
+		await refresh();
+	}
+}
+
 async function toggleChannel() {
 	const next =
 		status.value?.modStatus.channel === "prerelease" ? "stable" : "prerelease";
 	status.value = await setModChannel(next);
+	try {
+		status.value = await checkModUpdate();
+	} catch {
+		// channel label still updated; availability unknown until next check
+	}
 }
 
 async function runCommandWithGamePathFallback<T>(
@@ -176,22 +250,15 @@ onBeforeUnmount(() => {
           </div>
           <div class="separator" aria-hidden="true"></div>
           <div class="launch-cell">
-            <div v-if="status?.game.updateAvailable || status?.modStatus.updateAvailable" class="update-stack">
+            <div v-if="updateActions.length > 0" class="update-stack">
               <LcarsButton
-                v-if="status?.game.updateAvailable"
-                tone="gold"
-                :edge="status?.modStatus.updateAvailable ? 'left' : 'single'"
-                @click="updateGame"
+                v-for="(action, index) in updateActions"
+                :key="action.key"
+                :tone="action.tone"
+                :edge="updateEdge(index, updateActions.length)"
+                @click="action.run"
               >
-                Update Game
-              </LcarsButton>
-              <LcarsButton
-                v-if="status?.modStatus.updateAvailable"
-                tone="blue"
-                :edge="status?.game.updateAvailable ? 'right' : 'single'"
-                @click="updateMod"
-              >
-                Update Mod
+                {{ action.label }}
               </LcarsButton>
             </div>
             <StatusStrip class="launch-status" :message="message" :warning="warning" />

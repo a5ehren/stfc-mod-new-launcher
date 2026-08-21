@@ -28,6 +28,7 @@ pub fn validate_game_path(path: String) -> CommandResult<crate::models::GameStat
     Ok(crate::models::GameStatus {
         known: true,
         installed_version: crate::game_locator::installed_version(&validated),
+        latest_version: None,
         update_available: false,
         path: Some(validated.to_string_lossy().to_string()),
     })
@@ -212,10 +213,62 @@ pub async fn launch_game(app: tauri::AppHandle, state: State<'_, AppState>) -> C
 #[tauri::command]
 pub async fn check_launcher_update(
     app: tauri::AppHandle,
+    state: State<'_, AppState>,
 ) -> CommandResult<Option<crate::self_update::LauncherUpdateInfo>> {
-    crate::self_update::check_for_launcher_update(app)
+    let info = crate::self_update::check_for_launcher_update(app)
         .await
-        .map_err(ErrorDto::from)
+        .map_err(ErrorDto::from)?;
+    if let Some(info) = &info {
+        state
+            .diagnostics
+            .info(
+                "self_update",
+                &format!("launcher update available: {}", info.version),
+            )
+            .map_err(ErrorDto::from)?;
+    }
+    let mut status = state.status.lock().map_err(|_| ErrorDto {
+        kind: "state".into(),
+        message: "launcher status lock is poisoned".into(),
+    })?;
+    status.launcher_update_available = info.is_some();
+    drop(status);
+    Ok(info)
+}
+
+#[tauri::command]
+pub async fn install_launcher_update(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> CommandResult<bool> {
+    let progress_app = app.clone();
+    let installed = crate::self_update::install_launcher_update(app, move |downloaded, total| {
+        emit_progress(
+            &progress_app,
+            ProgressEvent {
+                operation: "launcherUpdate".into(),
+                phase: "downloading".into(),
+                message: "downloading launcher update".into(),
+                current: Some(downloaded),
+                total,
+            },
+        );
+    })
+    .await
+    .map_err(ErrorDto::from)?;
+
+    if installed {
+        state
+            .diagnostics
+            .info("self_update", "launcher update installed; restart required")
+            .map_err(ErrorDto::from)?;
+        let mut status = state.status.lock().map_err(|_| ErrorDto {
+            kind: "state".into(),
+            message: "launcher status lock is poisoned".into(),
+        })?;
+        status.launcher_update_available = false;
+    }
+    Ok(installed)
 }
 
 fn open_logs_error(message: impl Into<String>) -> ErrorDto {
@@ -362,6 +415,72 @@ fn open_or_focus_config_editor<R: tauri::Runtime>(
     Ok(())
 }
 
+/// Checks Xsolla for a game update plan from the installed version and
+/// reconciles the game status snapshot. Opportunistic: when no game path is
+/// known the current status is returned unchanged.
+#[tauri::command]
+pub async fn check_game_update(state: State<'_, AppState>) -> CommandResult<LauncherStatus> {
+    let platform = crate::models::current_platform();
+    let game_path = match resolve_game_path(&state, platform).await {
+        Ok(resolved) => resolved.root,
+        Err(_) => {
+            let status = state.status.lock().map_err(|_| ErrorDto {
+                kind: "state".into(),
+                message: "launcher status lock is poisoned".into(),
+            })?;
+            return Ok(status.clone());
+        }
+    };
+    let installed_version = crate::game_locator::installed_version(&game_path);
+
+    {
+        let mut status = state.status.lock().map_err(|_| ErrorDto {
+            kind: "state".into(),
+            message: "launcher status lock is poisoned".into(),
+        })?;
+        status.game.known = true;
+        status.game.path = Some(game_path.to_string_lossy().to_string());
+        status.game.installed_version = installed_version;
+    }
+
+    state
+        .diagnostics
+        .info(
+            "game_update",
+            &format!(
+                "checking update plan from installed version {} on {:?}",
+                installed_version.unwrap_or(0),
+                platform
+            ),
+        )
+        .map_err(ErrorDto::from)?;
+
+    let client = reqwest::Client::new();
+    let plan = match crate::game_updater::fetch_update_plan(
+        &client,
+        platform,
+        installed_version.unwrap_or(0),
+    )
+    .await
+    {
+        Ok(plan) => plan,
+        Err(err) => {
+            let _ = state
+                .diagnostics
+                .error("game_update", &format!("game update check failed: {err}"));
+            return Err(ErrorDto::from(err));
+        }
+    };
+
+    let mut status = state.status.lock().map_err(|_| ErrorDto {
+        kind: "state".into(),
+        message: "launcher status lock is poisoned".into(),
+    })?;
+    status.game.latest_version = plan.as_ref().and_then(|plan| plan.target_version);
+    status.game.update_available = plan.is_some();
+    Ok(status.clone())
+}
+
 #[tauri::command]
 pub async fn update_game(app: tauri::AppHandle, state: State<'_, AppState>) -> CommandResult<bool> {
     let diagnostics = state.diagnostics.clone();
@@ -434,6 +553,81 @@ pub async fn update_game(app: tauri::AppHandle, state: State<'_, AppState>) -> C
 #[tauri::command]
 pub async fn update_mod(app: tauri::AppHandle, state: State<'_, AppState>) -> CommandResult<()> {
     perform_mod_update(&app, &state).await
+}
+
+/// Checks GitHub for the latest mod release on the configured channel and
+/// reconciles the status snapshot: whether the platform library is present,
+/// which version is installed (from persisted state), and whether the latest
+/// release differs. Installs nothing; the Update Mod button surfaces when
+/// `update_available` is set.
+#[tauri::command]
+pub async fn check_mod_update(state: State<'_, AppState>) -> CommandResult<LauncherStatus> {
+    let platform = crate::models::current_platform();
+    let (channel, installed_version) = {
+        let persisted = state.persisted.lock().map_err(|_| ErrorDto {
+            kind: "state".into(),
+            message: "launcher state lock is poisoned".into(),
+        })?;
+        (
+            persisted.mod_channel,
+            persisted.installed_mod_version.clone(),
+        )
+    };
+
+    let library = state
+        .paths
+        .mods_dir
+        .join(crate::mod_manager::platform_library_name(platform));
+    let library_present = library.is_file();
+
+    // Reflect on-disk reality even if the network check below fails.
+    {
+        let mut status = state.status.lock().map_err(|_| ErrorDto {
+            kind: "state".into(),
+            message: "launcher status lock is poisoned".into(),
+        })?;
+        status.mod_status.installed = library_present;
+        status.mod_status.installed_version = if library_present {
+            installed_version.clone()
+        } else {
+            None
+        };
+        if !library_present {
+            status.mod_status.update_available = true;
+        }
+    }
+
+    state
+        .diagnostics
+        .info(
+            "mod_update",
+            &format!("checking mod releases for {platform:?} on {channel:?}"),
+        )
+        .map_err(ErrorDto::from)?;
+
+    let client = reqwest::Client::new();
+    let selected = match crate::github_releases::fetch_releases(&client)
+        .await
+        .and_then(|releases| {
+            crate::github_releases::select_release_asset(&releases, platform, channel)
+        }) {
+        Ok(selected) => selected,
+        Err(err) => {
+            let _ = state
+                .diagnostics
+                .error("mod_update", &format!("mod release check failed: {err}"));
+            return Err(ErrorDto::from(err));
+        }
+    };
+
+    let mut status = state.status.lock().map_err(|_| ErrorDto {
+        kind: "state".into(),
+        message: "launcher status lock is poisoned".into(),
+    })?;
+    status.mod_status.latest_version = Some(selected.version.clone());
+    status.mod_status.update_available =
+        !library_present || installed_version.as_deref() != Some(selected.version.as_str());
+    Ok(status.clone())
 }
 
 async fn perform_mod_update(

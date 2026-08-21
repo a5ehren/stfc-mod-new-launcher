@@ -54,12 +54,24 @@ export function updateGame(): Promise<boolean> {
 	return invoke("update_game");
 }
 
+export function checkGameUpdate(): Promise<LauncherStatus> {
+	return invoke("check_game_update");
+}
+
 export function updateMod(): Promise<void> {
 	return invoke("update_mod");
 }
 
+export function checkModUpdate(): Promise<LauncherStatus> {
+	return invoke("check_mod_update");
+}
+
 export function checkLauncherUpdate(): Promise<LauncherUpdateInfo | null> {
 	return invoke("check_launcher_update");
+}
+
+export function installLauncherUpdate(): Promise<boolean> {
+	return invoke("install_launcher_update");
 }
 
 export function getWindowsLegacyCleanupPlan(

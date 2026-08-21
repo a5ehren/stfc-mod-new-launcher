@@ -43,6 +43,7 @@ pub struct GameStatus {
     pub known: bool,
     pub path: Option<String>,
     pub installed_version: Option<u32>,
+    pub latest_version: Option<u32>,
     pub update_available: bool,
 }
 
@@ -99,6 +100,7 @@ mod tests {
                 known: true,
                 path: Some("/tmp/game".into()),
                 installed_version: Some(168),
+                latest_version: Some(169),
                 update_available: true,
             },
             mod_status: ModStatus {

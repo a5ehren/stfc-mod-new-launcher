@@ -32,6 +32,7 @@ impl AppState {
                     known: false,
                     path: None,
                     installed_version: None,
+                    latest_version: None,
                     update_available: false,
                 },
                 mod_status: ModStatus {
@@ -144,6 +145,7 @@ mod tests {
         assert!(!status.game.known);
         assert_eq!(status.game.path, None);
         assert_eq!(status.game.installed_version, None);
+        assert_eq!(status.game.latest_version, None);
         assert!(!status.game.update_available);
         assert!(!status.mod_status.installed);
         assert_eq!(status.mod_status.installed_version, None);

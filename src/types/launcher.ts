@@ -5,6 +5,7 @@ export type GameStatus = {
 	known: boolean;
 	path: string | null;
 	installedVersion: number | null;
+	latestVersion: number | null;
 	updateAvailable: boolean;
 };
 
