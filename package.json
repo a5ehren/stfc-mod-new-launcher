@@ -5,12 +5,10 @@
 	"type": "module",
 	"scripts": {
 		"dev": "vite",
-		"dev:linux": "GDK_BACKEND=x11 pnpm tauri dev",
 		"build": "vue-tsc --noEmit && vite build",
 		"build:macos": "pnpm tauri build --bundles dmg --target universal-apple-darwin",
 		"build:windows": "pnpm exec tauri build --bundles msi --ci",
 		"build:windows:arm64": "pnpm exec tauri build --bundles msi --target aarch64-pc-windows-msvc --ci",
-		"build:linux": "pnpm exec tauri build --bundles deb,appimage --ci",
 		"preview": "vite preview",
 		"test": "vitest run",
 		"test:watch": "vitest",

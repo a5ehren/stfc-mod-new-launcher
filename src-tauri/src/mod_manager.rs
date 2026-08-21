@@ -172,7 +172,6 @@ pub fn platform_library_name(platform: crate::models::Platform) -> &'static str 
     match platform {
         crate::models::Platform::Windows => "version.dll",
         crate::models::Platform::MacOs => "libstfc-community-mod.dylib",
-        crate::models::Platform::LinuxWine => "version.dll", // WINE uses Windows DLL
     }
 }
 
@@ -430,10 +429,6 @@ mod tests {
         assert_eq!(
             platform_library_name(crate::models::Platform::MacOs),
             "libstfc-community-mod.dylib"
-        );
-        assert_eq!(
-            platform_library_name(crate::models::Platform::LinuxWine),
-            "version.dll"
         );
     }
 

@@ -20,35 +20,6 @@ use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Linux/WebKitGTK: WebKitGTK 2.42+ composites via a DMA-BUF renderer that
-    // allocates a GBM buffer the size of the window. On systems without a working
-    // GPU/DRM/GBM stack (VMs, containers, headless/remote X, Xvfb, some Wayland+EGL
-    // setups) `gbm_bo_create` fails with EINVAL and prints
-    // "Failed to create GBM buffer of size <W>x<H>: Invalid argument", leaving the
-    // webview blank. Disable the DMA-BUF renderer and fall back to shared-memory
-    // compositing. Only set when the user hasn't explicitly chosen, so power users
-    // can override via the environment.
-    #[cfg(target_os = "linux")]
-    if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
-        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
-    }
-
-    // Linux/WebKitGTK: the in-process GTK file chooser (tauri-plugin-dialog's
-    // folder picker) enumerates directories via GIO and queries `standard::size`
-    // on GFileInfo objects that were created without that attribute, producing
-    // benign but noisy GLib-GIO-CRITICAL warnings ("GFileInfo created without
-    // standard::size" / "g_file_info_get_size: should not be reached") on
-    // stderr during dev. Route the file dialog through xdg-desktop-portal so the
-    // enumeration happens in the portal process and the criticals stay out of our
-    // stderr. Real desktop users have a portal installed; on portal-less hosts
-    // (CI / build-only devcontainers) GTK transparently falls back to the
-    // in-process chooser. Only set when the user hasn't explicitly chosen, so
-    // power users can override via the environment.
-    #[cfg(target_os = "linux")]
-    if std::env::var_os("GTK_USE_PORTAL").is_none() {
-        std::env::set_var("GTK_USE_PORTAL", "1");
-    }
-
     tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())

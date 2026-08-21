@@ -185,10 +185,7 @@ pub async fn launch_game(app: tauri::AppHandle, state: State<'_, AppState>) -> C
         })?;
         persisted.launch_mode
     };
-    let ResolvedGame {
-        root: game_path,
-        prime_exe,
-    } = resolve_game_path(&state, platform).await?;
+    let ResolvedGame { root: game_path } = resolve_game_path(&state, platform).await?;
     let mod_library = state
         .paths
         .mods_dir
@@ -199,26 +196,11 @@ pub async fn launch_game(app: tauri::AppHandle, state: State<'_, AppState>) -> C
         })
         .await?;
     }
-    let wine_runner = crate::launch::resolve_wine_runner();
-    let plan = crate::launch::build_launch_plan(
-        platform,
-        &game_path,
-        &mod_library,
-        launch_mode,
-        &wine_runner,
-        prime_exe.as_deref(),
-    )
-    .map_err(ErrorDto::from)?;
+    let plan = crate::launch::build_launch_plan(platform, &game_path, &mod_library, launch_mode)
+        .map_err(ErrorDto::from)?;
     state
         .diagnostics
-        .info(
-            "launch",
-            &format!(
-                "launching with mode {:?} via {}",
-                launch_mode,
-                wine_runner.label()
-            ),
-        )
+        .info("launch", &format!("launching with mode {launch_mode:?}"))
         .map_err(ErrorDto::from)?;
     emit_progress(
         &app,
@@ -640,11 +622,9 @@ where
     })
 }
 
-/// A validated game install: its root plus, for WINE prefixes, the `prime.exe`
-/// located while validating so launch plan building need not re-scan the prefix.
+/// A validated game install root.
 struct ResolvedGame {
     root: PathBuf,
-    prime_exe: Option<PathBuf>,
 }
 
 async fn resolve_game_path(
@@ -660,28 +640,9 @@ async fn resolve_game_path(
     };
     if let Some(path) = persisted_path {
         // Re-validate: the persisted path may now be stale (game moved or
-        // uninstalled). For WINE this walk also yields prime.exe, which we carry
-        // forward so build_launch_plan does not have to scan the prefix again.
-        match platform {
-            crate::models::Platform::LinuxWine => {
-                // game_path is the game folder (the directory containing
-                // prime.exe). Re-validate it; prime.exe lives directly inside.
-                if crate::game_locator::is_valid_game_root(&path, platform) {
-                    let prime_exe = path.join("prime.exe");
-                    return Ok(ResolvedGame {
-                        root: path,
-                        prime_exe: Some(prime_exe),
-                    });
-                }
-            }
-            _ => {
-                if crate::game_locator::is_valid_game_root(&path, platform) {
-                    return Ok(ResolvedGame {
-                        root: path,
-                        prime_exe: None,
-                    });
-                }
-            }
+        // uninstalled).
+        if crate::game_locator::is_valid_game_root(&path, platform) {
+            return Ok(ResolvedGame { root: path });
         }
         // Stale persisted path; fall through to re-discovery rather than running
         // an update/launch against a directory that is no longer a valid install.
@@ -703,10 +664,7 @@ async fn resolve_game_path(
     };
 
     persist_game_path(state, &path)?;
-    Ok(ResolvedGame {
-        root: path,
-        prime_exe: None,
-    })
+    Ok(ResolvedGame { root: path })
 }
 
 fn persist_game_path(state: &State<'_, AppState>, path: &std::path::Path) -> CommandResult<()> {
