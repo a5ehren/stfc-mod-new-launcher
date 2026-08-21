@@ -28,10 +28,10 @@
 		"@tauri-apps/plugin-process": "^2.3.1",
 		"@tauri-apps/plugin-updater": "^2.10.1",
 		"toml": "^5.0.0",
-		"vue": "^3.5.40"
+		"vue": "^3.5.41"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "2.5.6",
+		"@biomejs/biome": "2.5.8",
 		"@tauri-apps/cli": "^2.11.4",
 		"@types/node": "^24.13.3",
 		"@vitejs/plugin-vue": "^6.0.8",
@@ -40,9 +40,9 @@
 		"husky": "^9.1.7",
 		"jsdom": "^29.1.1",
 		"typescript": "~6.0.3",
-		"vite": "^8.2.0",
-		"vitest": "^4.1.10",
-		"vue-tsc": "^3.3.9"
+		"vite": "^8.2.2",
+		"vitest": "^4.1.11",
+		"vue-tsc": "^3.3.10"
 	},
-	"packageManager": "pnpm@11.17.0"
+	"packageManager": "pnpm@11.22.0"
 }
