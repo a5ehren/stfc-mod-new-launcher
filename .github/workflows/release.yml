@@ -17,7 +17,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -34,7 +34,7 @@ jobs:
           release_tag: ${{ github.event.release.tag_name }}
 
       - name: Upload macOS release asset
-        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
+        uses: softprops/action-gh-release@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -48,7 +48,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -66,47 +66,9 @@ jobs:
           release_tag: ${{ github.event.release.tag_name }}
 
       - name: Upload Windows release assets
-        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
+        uses: softprops/action-gh-release@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ github.event.release.tag_name }}
           files: release-assets/stfc-mod-new-launcher-${{ github.event.release.tag_name }}-windows-x64.msi
-
-  build-linux:
-    name: Build Linux bundle
-    runs-on: ubuntu-22.04
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Install Linux build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libfuse2
-
-      - name: Build Linux bundle
-        uses: ./.github/actions/tauri-build
-        with:
-          build_command: pnpm build:linux
-
-      - name: Package Linux release assets
-        uses: ./.github/actions/tauri-package
-        with:
-          platform: linux
-          arch: x64
-          release_tag: ${{ github.event.release.tag_name }}
-
-      - name: Upload Linux release assets
-        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.event.release.tag_name }}
-          files: |
-            release-assets/stfc-mod-new-launcher-${{ github.event.release.tag_name }}-linux-x64.deb
-            release-assets/stfc-mod-new-launcher-${{ github.event.release.tag_name }}-linux-x64.AppImage
