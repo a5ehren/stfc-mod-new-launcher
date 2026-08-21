@@ -403,12 +403,17 @@ pub async fn fetch_update_plan(
             source,
         })?;
     let plan = crate::xsolla::parse_update_plan(&xml)?;
-    if let Some(target_version) = plan.target_version {
-        if target_version <= installed_version {
-            return Ok(None);
-        }
+    Ok(actionable_plan(plan, installed_version))
+}
+
+/// A plan is actionable only when it carries a target version newer than the
+/// installed one. Xsolla signals "already up to date" with a bare
+/// `version="-1"` marker, which yields no target version at all.
+fn actionable_plan(plan: XsollaPlan, installed_version: u32) -> Option<XsollaPlan> {
+    match plan.target_version {
+        Some(target_version) if target_version > installed_version => Some(plan),
+        _ => None,
     }
-    Ok(Some(plan))
 }
 
 #[cfg(test)]
@@ -446,6 +451,41 @@ mod tests {
             xsolla_update_url(168, Platform::Windows),
             "https://gus.xsolla.com/updates?version=168&project_id=152033&region=&platform=windows"
         );
+    }
+
+    /// Hits the live Xsolla update service; run explicitly with
+    /// `cargo test -- --ignored live_xsolla`.
+    #[test]
+    #[ignore = "requires network access"]
+    fn live_xsolla_reports_current_version_as_up_to_date() {
+        let client = reqwest::Client::new();
+        let plan = tauri::async_runtime::block_on(fetch_update_plan(&client, Platform::MacOs, 189))
+            .expect("live fetch");
+        assert!(plan.is_none(), "version 189 should be up to date");
+
+        let plan = tauri::async_runtime::block_on(fetch_update_plan(&client, Platform::MacOs, 185))
+            .expect("live fetch");
+        assert!(
+            plan.and_then(|plan| plan.target_version)
+                .is_some_and(|target| target > 185),
+            "version 185 should have a patch chain to a newer version"
+        );
+    }
+
+    #[test]
+    fn actionable_plan_requires_newer_target_version() {
+        let plan = |target_version: Option<u32>| XsollaPlan {
+            target_version,
+            actions: vec![],
+        };
+
+        // A newer target is actionable.
+        assert!(actionable_plan(plan(Some(190)), 189).is_some());
+        // Same-version and older targets are not.
+        assert!(actionable_plan(plan(Some(189)), 189).is_none());
+        assert!(actionable_plan(plan(Some(188)), 189).is_none());
+        // No target version (the version="-1" up-to-date marker) is not.
+        assert!(actionable_plan(plan(None), 189).is_none());
     }
 
     #[test]

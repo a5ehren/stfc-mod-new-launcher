@@ -62,13 +62,23 @@ pub fn parse_update_plan(xml: &str) -> LauncherResult<XsollaPlan> {
                     Some("wait_actions") => actions.push(XsollaAction::Wait),
                     Some("version") => {
                         let version = get(b"version")
-                            .and_then(|value| value.parse().ok())
+                            .and_then(|value| value.parse::<i32>().ok())
                             .ok_or_else(|| LauncherError::InvalidData {
                                 context: "parsing Xsolla version action".into(),
                                 message: "version action missing numeric version".into(),
                             })?;
-                        target_version = Some(version);
-                        actions.push(XsollaAction::Version { version });
+                        // Xsolla emits a bare version="-1" marker when the
+                        // install is already up to date; it carries no update
+                        // target and must not produce a Version action.
+                        if version >= 0 {
+                            let version =
+                                u32::try_from(version).map_err(|_| LauncherError::InvalidData {
+                                    context: "parsing Xsolla version action".into(),
+                                    message: format!("version action out of range: {version}"),
+                                })?;
+                            target_version = Some(version);
+                            actions.push(XsollaAction::Version { version });
+                        }
                     }
                     Some("extracted_size") => {}
                     Some(other) => {
@@ -140,5 +150,16 @@ mod tests {
     fn rejects_patch_path_escape() {
         let error = normalize_relative_patch_path("../escape").expect_err("path escape rejected");
         assert!(error.to_string().contains("invalid patch path"));
+    }
+
+    #[test]
+    fn up_to_date_marker_yields_no_target_version() {
+        // Real Xsolla response for an install that is already current: a bare
+        // version="-1" action and nothing else.
+        let plan = parse_update_plan(include_str!("../tests/fixtures/xsolla_no_update.xml"))
+            .expect("parse no-update plan");
+
+        assert_eq!(plan.target_version, None);
+        assert!(plan.actions.is_empty());
     }
 }
