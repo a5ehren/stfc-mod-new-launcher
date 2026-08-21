@@ -159,7 +159,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <LcarsShell banner-text="STFC Community Mod" compact-header>
+  <LcarsShell banner-text="STFC Community Mod Launcher" compact-header>
     <div class="main-grid">
       <div class="footer-actions">
         <div class="primary-row">

@@ -1,6 +1,6 @@
 {
 	"$schema": "https://schema.tauri.app/config/2",
-	"productName": "stfc-mod-new-launcher",
+	"productName": "STFC Community Mod Launcher",
 	"version": "0.1.0",
 	"identifier": "com.stfcmod.launcher",
 	"build": {
@@ -13,7 +13,7 @@
 		"windows": [
 			{
 				"label": "main",
-				"title": "STFC Community Mod",
+				"title": "STFC Community Mod Launcher",
 				"width": 760,
 				"height": 520,
 				"resizable": false
