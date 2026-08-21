@@ -43,7 +43,16 @@
 		],
 		"createUpdaterArtifacts": false,
 		"macOS": {
-			"signingIdentity": "-"
+			"signingIdentity": "-",
+			"dmg": {
+				"background": "installer/dmg-background.png"
+			}
+		},
+		"windows": {
+			"wix": {
+				"bannerPath": "installer/wix-banner.bmp",
+				"dialogImagePath": "installer/wix-dialog.bmp"
+			}
 		}
 	}
 }
