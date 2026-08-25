@@ -5,7 +5,9 @@
 use crate::errors::{LauncherError, LauncherResult};
 use crate::storage::ManagedPaths;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
+#[cfg(target_os = "macos")]
+use std::process::Stdio;
 
 pub fn backup_dir(paths: &ManagedPaths, name: &str) -> PathBuf {
     paths.root.join("backups").join(name)

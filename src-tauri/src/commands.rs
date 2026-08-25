@@ -262,16 +262,12 @@ pub async fn mi_provision(
     for name in &names {
         crate::instance_users::validate_instance_name(name).map_err(ErrorDto::from)?;
     }
-    let (primary_user, game_source, shared_root) = {
+    let (game_source, shared_root) = {
         let persisted = state.persisted.lock().map_err(|_| ErrorDto {
             kind: "state".into(),
             message: "launcher state lock is poisoned".into(),
         })?;
-        let user = std::env::var("USER")
-            .or_else(|_| std::env::var("USERNAME"))
-            .unwrap_or_default();
         (
-            user,
             persisted.game_path.clone(),
             crate::provisioning::default_shared_root(crate::models::current_platform()),
         )
@@ -284,6 +280,10 @@ pub async fn mi_provision(
             "Provisioning instances (admin password required)\u{2026}",
         ),
     );
+    #[cfg(target_os = "macos")]
+    let primary_user = std::env::var("USER")
+        .or_else(|_| std::env::var("USERNAME"))
+        .unwrap_or_default();
     #[cfg(target_os = "macos")]
     let script = crate::provisioning::macos_provision_script(
         &primary_user,

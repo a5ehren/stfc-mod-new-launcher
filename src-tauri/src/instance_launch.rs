@@ -338,7 +338,7 @@ pub(crate) fn run_as_user(username: &str, cmd: &std::process::Command) -> Launch
             windows::core::PCWSTR(pass_wide.as_ptr()),
             LOGON_WITH_PROFILE,
             windows::core::PCWSTR::null(),
-            windows::core::PWSTR(cmd_wide.as_ptr() as *mut u16),
+            Some(windows::core::PWSTR(cmd_wide.as_ptr() as *mut u16)),
             CREATE_UNICODE_ENVIRONMENT,
             Some(env_block.as_ptr() as *const core::ffi::c_void),
             cwd_wide
@@ -400,7 +400,7 @@ fn build_env_block(cmd: &std::process::Command) -> Vec<u16> {
     }
     let mut block: Vec<u16> = env
         .iter()
-        .flat_map(|(k, v)| format!("{k}={v}").encode_utf16().chain(std::iter::once(0)))
+        .flat_map(|(k, v)| format!("{k}={v}\0").encode_utf16().collect::<Vec<u16>>())
         .collect();
     block.push(0);
     block
