@@ -73,6 +73,7 @@ pub struct WizardPlanDto {
     pub needs_relocation: bool,
     pub game_source: Option<PathBuf>,
     pub shared_root: PathBuf,
+    pub existing_names: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -83,6 +84,8 @@ pub struct InstanceStatusDto {
     pub running: bool,
     pub pid: Option<u32>,
     pub last_backup_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub label: Option<String>,
+    pub is_base: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -116,6 +119,8 @@ pub struct MultiInstanceState {
     pub enabled: bool,
     pub shared_game_root: Option<PathBuf>,
     pub instances: Vec<Instance>,
+    pub base_label: Option<String>,
+    pub base_last_backup_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -125,6 +130,8 @@ pub struct Instance {
     pub os_username: String,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub last_backup_at: Option<chrono::DateTime<chrono::Utc>>,
+    #[serde(default)]
+    pub label: Option<String>,
 }
 
 #[cfg(test)]
@@ -187,7 +194,9 @@ mod tests {
                     .expect("date")
                     .to_utc(),
                 last_backup_at: None,
+                label: None,
             }],
+            ..Default::default()
         };
         let json = serde_json::to_value(&mi).expect("serialize");
         assert_eq!(json["sharedGameRoot"], "/Users/Shared/STFC/game");

@@ -8,26 +8,42 @@ use crate::models::MultiInstanceState;
 
 pub const USER_PREFIX: &str = "stfc-";
 
+/// Reserved name for the primary (current-user) account row in instance
+/// commands. Never a provisioned service user, so it can't collide with
+/// generated altN names — and validation rejects it for manual names.
+pub const BASE_INSTANCE_NAME: &str = "base";
+
+/// The OS user the launcher itself runs as.
+pub fn current_username() -> LauncherResult<String> {
+    #[cfg(target_os = "windows")]
+    let var = "USERNAME";
+    #[cfg(not(target_os = "windows"))]
+    let var = "USER";
+    std::env::var(var).map_err(|_| LauncherError::InvalidData {
+        context: "resolving current username".into(),
+        message: format!("{var} env var not set"),
+    })
+}
+
 pub fn os_username(name: &str) -> String {
     format!("{USER_PREFIX}{name}")
 }
 
-/// Lowercase ASCII alnum + '-', 1..=16 chars. Short because it becomes an OS
+/// ASCII letters (any case) + digits + '-', 1..=16 chars. Short because it becomes an OS
 /// username (macOS dscl and Windows both accept far more, but short+simple
 /// keeps sudoers wildcards and pgrep patterns safe).
 pub fn validate_instance_name(name: &str) -> LauncherResult<()> {
     let ok = !name.is_empty()
         && name.len() <= 16
         && !name.starts_with(USER_PREFIX)
-        && name
-            .chars()
-            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
+        && !name.eq_ignore_ascii_case(BASE_INSTANCE_NAME)
+        && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-');
     if ok {
         Ok(())
     } else {
         Err(LauncherError::InvalidData {
             context: "validating instance name".into(),
-            message: format!("instance name {name:?} must be 1-16 chars of a-z, 0-9, '-'"),
+            message: format!("instance name {name:?} must be 1-16 chars of a-z, A-Z, 0-9, '-'"),
         })
     }
 }
@@ -45,11 +61,21 @@ mod tests {
     fn accepts_simple_names() {
         assert!(validate_instance_name("alt2").is_ok());
         assert!(validate_instance_name("armada-crew").is_ok());
+        assert!(validate_instance_name("Alt2").is_ok());
     }
 
     #[test]
     fn rejects_unsafe_names() {
-        for bad in ["", "Alt2", "a b", "../x", "stfc-x", &"a".repeat(17), "x_1"] {
+        for bad in [
+            "",
+            "a b",
+            "../x",
+            "stfc-x",
+            "base",
+            "BASE",
+            &"a".repeat(17),
+            "x_1",
+        ] {
             assert!(validate_instance_name(bad).is_err(), "accepted {bad:?}");
         }
     }
@@ -62,6 +88,7 @@ mod tests {
                 os_username: "stfc-alt2".into(),
                 created_at: chrono::Utc::now(),
                 last_backup_at: None,
+                label: None,
             }],
             ..Default::default()
         };

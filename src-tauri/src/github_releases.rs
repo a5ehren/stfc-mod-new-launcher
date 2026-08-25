@@ -69,6 +69,32 @@ pub fn select_release_asset(
     })
 }
 
+/// Returns true when `candidate` is a strictly newer release tag than
+/// `installed`. Tags look like `v1.1.6.0` or `v1.1.5.beta.4`: dot-separated
+/// numeric release segments, optionally followed by text pre-release labels.
+/// Compared segment by segment; a numeric segment outranks a text label at
+/// the same position (stable > pre-release of the same base) and a missing
+/// trailing segment counts as 0 (v1.1.6 == v1.1.6.0).
+pub fn is_newer_version(candidate: &str, installed: &str) -> bool {
+    let a: Vec<&str> = candidate.trim_start_matches('v').split('.').collect();
+    let b: Vec<&str> = installed.trim_start_matches('v').split('.').collect();
+    for i in 0..a.len().max(b.len()) {
+        // Missing trailing segment counts as the number 0.
+        let num = |v: &[&str]| v.get(i).map_or(Some(0), |s| s.parse::<u64>().ok());
+        let ordering = match (num(&a), num(&b)) {
+            (Some(m), Some(n)) => m.cmp(&n),
+            // A numeric segment (incl. implicit 0) outranks a text label.
+            (Some(_), None) => std::cmp::Ordering::Greater,
+            (None, Some(_)) => std::cmp::Ordering::Less,
+            (None, None) => a[i].cmp(b[i]),
+        };
+        if ordering != std::cmp::Ordering::Equal {
+            return ordering == std::cmp::Ordering::Greater;
+        }
+    }
+    false
+}
+
 pub async fn fetch_releases(client: &reqwest::Client) -> LauncherResult<Vec<GitHubRelease>> {
     fetch_releases_from(client, STFC_MOD_RELEASES_URL).await
 }
@@ -219,6 +245,21 @@ mod tests {
             }
             other => panic!("expected invalid data error, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn is_newer_version_compares_release_tags() {
+        // The reported bug: installed stable v1.1.6.0 vs latest prerelease v1.1.5.beta.4
+        assert!(!is_newer_version("v1.1.5.beta.4", "v1.1.6.0"));
+        assert!(is_newer_version("v1.1.7.beta.1", "v1.1.6.0"));
+        assert!(is_newer_version("v1.1.6.0", "v1.1.5.beta.4"));
+        assert!(!is_newer_version("v1.1.6.0", "v1.1.6.0"));
+        // Missing trailing segments count as 0
+        assert!(!is_newer_version("v1.1.6", "v1.1.6.0"));
+        // Stable outranks a pre-release of the same base; labels order lexically
+        assert!(!is_newer_version("v1.1.6.beta.1", "v1.1.6.0"));
+        assert!(is_newer_version("v1.1.5.beta.4", "v1.1.5.beta.3"));
+        assert!(!is_newer_version("v0.6.1.alpha.10", "v1.0.0"));
     }
 
     #[test]

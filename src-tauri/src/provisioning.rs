@@ -85,10 +85,13 @@ pub fn sudoers_content(primary_user: &str) -> String {
     format!("{primary_user} ALL=({USER_PREFIX}*) NOPASSWD: /usr/bin/env\n")
 }
 
-/// Idempotent provisioning: existing users are skipped with `dscl -read`
-/// short-circuits; if the game already lives at shared_root, `ditto` is fine
-/// (it copies into the existing directory merge — acceptable because we move
-/// the source away after the wizard run). All inputs are shell-quoted.
+/// Idempotent provisioning: only the bare record creation is guarded by a
+/// `dscl -read` short-circuit — every attribute set, password reset, and
+/// createhomedir runs unconditionally so a user left half-created by an
+/// interrupted run is repaired on the next one. If the game already lives at
+/// shared_root, `ditto` is fine (it copies into the existing directory merge
+/// — acceptable because we move the source away after the wizard run). All
+/// inputs are shell-quoted.
 ///
 /// Called with one password prompt via osascript (Task 5 wrapper).
 pub fn macos_provision_script(
@@ -100,25 +103,32 @@ pub fn macos_provision_script(
     let mut s = String::from("#!/bin/bash\nset -e\n");
 
     // --- users ---
-    // ponytail: uid base fixed at 502 (step depends on nothing on the host
-    // taking 502..501+names); provisioning pre-flight could scan for
-    // collisions if naming the user base becomes an issue.
-    for (i, name) in names.iter().enumerate() {
+    // UIDs are allocated above the current on-disk max at run time; a fixed
+    // base collides in practice (502 is a common second-login-account uid).
+    // set_user_attr delete+create keeps re-runs idempotent: dscl -create
+    // errors when the value already exists.
+    s.push_str("next_uid=$(( $(dscl . -list /Users UniqueID | awk '{print $2}' | sort -n | tail -1) + 1 ))\n");
+    s.push_str("set_user_attr() {\n  dscl . -delete \"/Users/$1\" \"$2\" 2>/dev/null || true\n  dscl . -create \"/Users/$1\" \"$2\" \"$3\"\n}\n");
+    for name in names {
         let user = os_username(name);
-        let uid = 502 + i;
-        s.push_str(&format!(
-            "if ! dscl . -read /Users/{user} >/dev/null 2>&1; then\n\
-             \x20 dscl . -create /Users/{user}\n\
-             \x20 dscl . -create /Users/{user} UserShell /usr/bin/false\n\
-             \x20 dscl . -create /Users/{user} RealName 'STFC {name}'\n\
-             \x20 dscl . -create /Users/{user} UniqueID {uid}\n\
-             \x20 dscl . -create /Users/{user} PrimaryGroupID 20\n\
-             \x20 dscl . -create /Users/{user} NFSHomeDirectory /Users/{user}\n\
-             \x20 dscl . -create /Users/{user} IsHidden 1\n\
-             \x20 dscl . -passwd /Users/{user} \"$(openssl rand -base64 24)\"\n\
-             \x20 createhomedir -c -u {user}\n\
-             fi\n"
-        ));
+        for line in [
+            format!("if ! dscl . -read /Users/{user} >/dev/null 2>&1; then"),
+            format!("  dscl . -create /Users/{user}"),
+            "fi".to_string(),
+            format!("uid=$(dscl . -read /Users/{user} UniqueID 2>/dev/null | awk '{{print $2}}')"),
+            "if [ -z \"$uid\" ]; then uid=$next_uid; next_uid=$((next_uid + 1)); fi".to_string(),
+            format!("set_user_attr {user} UserShell /usr/bin/false"),
+            format!("set_user_attr {user} RealName 'STFC {name}'"),
+            format!("set_user_attr {user} UniqueID \"$uid\""),
+            format!("set_user_attr {user} PrimaryGroupID 20"),
+            format!("set_user_attr {user} NFSHomeDirectory /Users/{user}"),
+            format!("set_user_attr {user} IsHidden 1"),
+            format!("dscl . -passwd /Users/{user} \"$(openssl rand -base64 24)\""),
+            format!("createhomedir -c -u {user}"),
+        ] {
+            s.push_str(&line);
+            s.push('\n');
+        }
     }
 
     // --- shared install --- (skip the move entirely if the source IS the shared root)
@@ -224,21 +234,107 @@ pub fn run_elevated(script: &str) -> LauncherResult<()> {
     let applescript = format!(
         "do shell script \"echo {encoded} | /usr/bin/base64 -D | /bin/bash\" with administrator privileges"
     );
-    let status = Command::new("osascript")
+    let output = Command::new("osascript")
         .args(["-e", &applescript])
-        .status()
+        .output()
         .map_err(|e| LauncherError::Io {
             context: "running osascript".into(),
             source: e,
         })?;
-    if status.success() {
+    if output.status.success() {
         Ok(())
     } else {
+        // osascript reports a cancel as "User canceled. (-128)" and a shell
+        // failure as "execution error: <stderr>"; surface whichever we got.
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let detail = stderr.trim();
         Err(LauncherError::InvalidData {
             context: "elevated provisioning".into(),
-            message: format!("osascript exited with {status} (user cancelled or script failed)"),
+            message: if detail.is_empty() {
+                format!("osascript exited with {}", output.status)
+            } else {
+                format!("elevated provisioning failed: {detail}")
+            },
         })
     }
+}
+
+/// Contents of the Terminal-run deletion script (pure, for tests).
+#[cfg(target_os = "macos")]
+fn macos_deprovision_script(username: &str, current: &str, self_path: &Path) -> String {
+    format!(
+        "sudo sysadminctl -deleteUser {username} -adminUser {current} -adminPassword -\nrm -f \"{self_path}\"\nexit\n",
+        self_path = self_path.display()
+    )
+}
+
+#[cfg(target_os = "macos")]
+fn user_record_exists(username: &str) -> bool {
+    Command::new("dscl")
+        .args([".", "-read", &format!("/Users/{username}")])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(true) // on lookup error, assume present
+}
+
+/// Deletes a service user on macOS. Directory Services refuses record
+/// deletion from a root osascript shell (eDSPermissionError -14120) and TCC
+/// blocks root from removing the home dir; sysadminctl is Apple's entitled
+/// tool but needs a real TTY for its secure `-adminPassword -` prompt. So we
+/// hand the command a visible Terminal window (one password entry, typed
+/// straight into the OS prompt — never through the launcher) and poll for
+/// the record to disappear. Already-deleted records return Ok immediately so
+/// retries after a partial failure complete cleanly.
+#[cfg(target_os = "macos")]
+pub fn deprovision_user(username: &str) -> LauncherResult<()> {
+    if !user_record_exists(username) {
+        return Ok(());
+    }
+    let current = crate::instance_users::current_username()?;
+    let script_path = std::env::temp_dir().join(format!("stfc-remove-{username}.sh"));
+    std::fs::write(
+        &script_path,
+        macos_deprovision_script(username, &current, &script_path),
+    )
+    .map_err(|e| LauncherError::Io {
+        context: "writing deprovision script".into(),
+        source: e,
+    })?;
+    let status = Command::new("osascript")
+        .args([
+            "-e",
+            &format!(
+                "tell application \"Terminal\" to do script \"bash '{}'\"",
+                script_path.display().to_string().replace('\'', "'\\''")
+            ),
+            "-e",
+            "tell application \"Terminal\" to activate",
+        ])
+        .status()
+        .map_err(|e| LauncherError::Io {
+            context: "opening Terminal for user deletion".into(),
+            source: e,
+        })?;
+    if !status.success() {
+        return Err(LauncherError::Operation {
+            context: "deprovisioning".into(),
+            message: format!("could not open Terminal (osascript exited {status})"),
+        });
+    }
+    // ponytail: fixed 2-minute ceiling — if the user closes the Terminal
+    // window without entering their password, we time out and they retry.
+    for _ in 0..240 {
+        if !user_record_exists(username) {
+            return Ok(());
+        }
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
+    Err(LauncherError::Operation {
+        context: "deprovisioning".into(),
+        message: format!(
+            "user {username} still present after 2 minutes — was the Terminal password prompt completed?"
+        ),
+    })
 }
 
 #[cfg(target_os = "windows")]
@@ -536,6 +632,20 @@ mod tests {
         let decoded =
             String::from_utf8(base64_decode(&encoded).expect("valid base64")).expect("utf8");
         assert_eq!(decoded, "echo \"hi\"\nset -e\n");
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_deprovision_uses_sysadminctl_interactive_password() {
+        let s = macos_deprovision_script(
+            "stfc-alt2",
+            "ebendler",
+            Path::new("/tmp/stfc-remove-stfc-alt2.sh"),
+        );
+        assert!(s.contains(
+            "sudo sysadminctl -deleteUser stfc-alt2 -adminUser ebendler -adminPassword -"
+        ));
+        assert!(s.contains("rm -f \"/tmp/stfc-remove-stfc-alt2.sh\""));
     }
 
     #[test]

@@ -29,6 +29,8 @@ export interface MultiInstanceState {
 	enabled: boolean;
 	sharedGameRoot: string | null;
 	instances: Instance[];
+	baseLabel?: string | null;
+	baseLastBackupAt?: string | null;
 }
 
 export interface Instance {
@@ -36,12 +38,14 @@ export interface Instance {
 	osUsername: string;
 	createdAt: string;
 	lastBackupAt: string | null;
+	label?: string | null;
 }
 
 export interface WizardPlanDto {
 	needsRelocation: boolean;
 	gameSource: string | null;
 	sharedRoot: string;
+	existingNames: string[];
 }
 
 export interface InstanceStatusDto {
@@ -50,6 +54,8 @@ export interface InstanceStatusDto {
 	running: boolean;
 	pid: number | null;
 	lastBackupAt: string | null;
+	label: string | null;
+	isBase: boolean;
 }
 
 export type ProgressEvent = {

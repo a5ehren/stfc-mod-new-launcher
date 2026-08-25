@@ -31,10 +31,6 @@ const message = ref("Initializing launcher");
 const showWizard = ref(false);
 let unlistenProgress: (() => void) | null = null;
 
-const channelLabel = computed(() =>
-	status.value?.modStatus.channel === "prerelease" ? "Prerelease" : "Stable",
-);
-
 const warning = computed(() => {
 	if (!status.value) return "";
 	if (
@@ -281,7 +277,15 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <button class="channel-toggle" @click="toggleChannel">{{ channelLabel }}</button>
+      <button
+        class="channel-toggle"
+        :aria-pressed="status?.modStatus.channel === 'prerelease'"
+        title="Switch mod channel"
+        @click="toggleChannel"
+      >
+        <span :class="{ active: status?.modStatus.channel !== 'prerelease' }">Stable</span>
+        <span :class="{ active: status?.modStatus.channel === 'prerelease' }">Prerelease</span>
+      </button>
     </div>
   </LcarsShell>
 </template>
@@ -297,7 +301,7 @@ onBeforeUnmount(() => {
 .footer-actions {
   display: grid;
   gap: 12px;
-  padding: 0 18px 8px 0;
+  padding: 0 18px 0 0;
 }
 .primary-row {
   display: grid;
@@ -338,18 +342,30 @@ onBeforeUnmount(() => {
   position: absolute;
   right: 18px;
   top: 4px;
-  border: 0;
+  border: 2px solid var(--lcars-blue);
   border-radius: 9999px;
+  background: #000;
+  height: 38px;
+  padding: 3px;
+  display: flex;
+  align-items: stretch;
+  gap: 3px;
+  cursor: pointer;
+  text-transform: uppercase;
+  font-size: 13px;
+  font-weight: 700;
+}
+.channel-toggle span {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border-radius: 9999px;
+  color: var(--lcars-blue);
+  opacity: 0.55;
+}
+.channel-toggle span.active {
   background: var(--lcars-blue);
   color: #000;
-  height: 38px;
-  min-width: 96px;
-  padding: 0 12px 6px;
-  text-transform: uppercase;
-  font-size: 14px;
-  font-weight: 700;
-  display: flex;
-  align-items: flex-end;
-  justify-content: flex-end;
+  opacity: 1;
 }
 </style>

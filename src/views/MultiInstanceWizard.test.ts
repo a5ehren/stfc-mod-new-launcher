@@ -8,6 +8,7 @@ vi.mock("@/lib/commands", () => ({
 		needsRelocation: false,
 		gameSource: "/game",
 		sharedRoot: "/Users/Shared/STFC/game",
+		existingNames: [],
 	})),
 	miProvision: vi.fn(async () => ({})),
 	onProgress: vi.fn(async () => vi.fn()),
@@ -59,6 +60,7 @@ describe("MultiInstanceWizard", () => {
 			needsRelocation: true,
 			gameSource: "/old/path",
 			sharedRoot: "/Users/Shared/STFC/game",
+			existingNames: [],
 		});
 		const wrapper = await mountWizard();
 		await wrapper.find('input[type="checkbox"]').setValue(true);
@@ -70,7 +72,7 @@ describe("MultiInstanceWizard", () => {
 		expect(wrapper.text()).toContain("/Users/Shared/STFC/game");
 	});
 
-	it("validates names and provisions through the command", async () => {
+	it("provisions the chosen number of auto-named instances", async () => {
 		const wrapper = await mountWizard();
 		await wrapper.find('input[type="checkbox"]').setValue(true);
 		await wrapper
@@ -78,23 +80,16 @@ describe("MultiInstanceWizard", () => {
 			.find((b) => b.text() === "Continue")
 			?.trigger("click");
 
-		const input = wrapper.find(".name-input");
-		await input.setValue("Bad Name");
-		expect(wrapper.text()).toContain("1-16 chars");
-
-		await input.setValue("alt2");
-		await wrapper
-			.findAll("button")
-			.find((b) => b.text() === "Add")
-			?.trigger("click");
+		await wrapper.find(".count-input").setValue(2);
 		expect(wrapper.text()).toContain("stfc-alt2");
+		expect(wrapper.text()).toContain("stfc-alt3");
 
 		await wrapper
 			.findAll("button")
 			.find((b) => b.text() === "Provision")
 			?.trigger("click");
 		await new Promise((resolve) => setTimeout(resolve, 0));
-		expect(miProvision).toHaveBeenCalledWith(["alt2"]);
+		expect(miProvision).toHaveBeenCalledWith(["alt2", "alt3"]);
 		expect(wrapper.text()).toContain("Multi-instance mode enabled");
 
 		await wrapper
@@ -114,11 +109,6 @@ describe("MultiInstanceWizard", () => {
 		await wrapper
 			.findAll("button")
 			.find((b) => b.text() === "Continue")
-			?.trigger("click");
-		await wrapper.find(".name-input").setValue("alt2");
-		await wrapper
-			.findAll("button")
-			.find((b) => b.text() === "Add")
 			?.trigger("click");
 		await wrapper
 			.findAll("button")

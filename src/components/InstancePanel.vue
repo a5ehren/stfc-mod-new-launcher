@@ -7,6 +7,7 @@ import {
 	miInstanceStatus,
 	miRemoveInstance,
 	miRestoreInstance,
+	miSetInstanceLabel,
 	miStartInstance,
 	miStopInstance,
 } from "@/lib/commands";
@@ -15,7 +16,26 @@ import type { InstanceStatusDto } from "@/types/launcher";
 
 const instances = ref<InstanceStatusDto[]>([]);
 const message = ref("");
+const editing = ref<string | null>(null);
+const editValue = ref("");
 let poll: ReturnType<typeof setInterval> | null = null;
+
+function displayName(instance: InstanceStatusDto): string {
+	const shown =
+		instance.label ?? (instance.isBase ? "Primary (you)" : instance.name);
+	return instance.label ? `${shown} (${instance.name})` : shown;
+}
+
+function startEdit(instance: InstanceStatusDto) {
+	editing.value = instance.name;
+	editValue.value = instance.label ?? "";
+}
+
+async function saveEdit(name: string) {
+	if (editing.value !== name) return;
+	editing.value = null;
+	await run(() => miSetInstanceLabel(name, editValue.value), "Label updated");
+}
 
 async function refresh() {
 	try {
@@ -87,7 +107,19 @@ onBeforeUnmount(() => {
     <p v-if="message" class="message">{{ message }}</p>
     <p v-if="instances.length === 0" class="empty">No instances provisioned.</p>
     <div v-for="instance in instances" :key="instance.name" class="instance-row">
-      <span class="name">{{ instance.name }}</span>
+      <span class="name" :title="instance.osUsername" @click="startEdit(instance)">
+        <input
+          v-if="editing === instance.name"
+          v-model="editValue"
+          class="label-input"
+          maxlength="32"
+          placeholder="(name)"
+          @keydown.enter="saveEdit(instance.name)"
+          @keydown.esc="editing = null"
+          @blur="saveEdit(instance.name)"
+        />
+        <template v-else>{{ displayName(instance) }}</template>
+      </span>
       <span class="badge" :class="instance.running ? 'running' : 'stopped'">
         {{ instance.running ? "Running" : "Stopped" }}
       </span>
@@ -98,7 +130,7 @@ onBeforeUnmount(() => {
         <LcarsButton tone="orange" edge="single" :disabled="!instance.running" @click="stop(instance.name)">Stop</LcarsButton>
         <LcarsButton tone="tan" edge="single" @click="backup(instance.name)">Backup</LcarsButton>
         <LcarsButton tone="gold" edge="single" @click="restore(instance.name)">Restore</LcarsButton>
-        <LcarsButton tone="red" edge="single" @click="remove(instance)">Remove</LcarsButton>
+        <LcarsButton v-if="!instance.isBase" tone="red" edge="single" @click="remove(instance)">Remove</LcarsButton>
       </span>
     </div>
   </section>
@@ -134,6 +166,16 @@ onBeforeUnmount(() => {
 .name {
   min-width: 96px;
   font-weight: 700;
+  cursor: text;
+}
+.label-input {
+  background: #000;
+  border: 1px solid var(--lcars-blue);
+  border-radius: 6px;
+  color: #fff;
+  padding: 2px 6px;
+  font: inherit;
+  width: 140px;
 }
 .badge {
   min-width: 72px;
@@ -161,7 +203,7 @@ onBeforeUnmount(() => {
   min-width: 0;
   height: 32px;
   font-size: 12px;
-  padding: 0 10px 4px;
+  padding: 0 10px;
   border-radius: 16px;
 }
 </style>

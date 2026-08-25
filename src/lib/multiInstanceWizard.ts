@@ -2,22 +2,34 @@ import type { WizardPlanDto } from "@/types/launcher";
 
 export type WizardStep = "warnings" | "relocate" | "instances" | "done";
 
+export const MAX_INSTANCES = 8;
+
 export interface WizardState {
 	step: WizardStep;
 	acknowledged: boolean;
 	needsRelocation: boolean;
-	names: string[];
+	existingNames: string[];
+	count: number;
 }
-
-export const INSTANCE_NAME_PATTERN = /^[a-z0-9-]{1,16}$/;
 
 export function initialWizardState(plan: WizardPlanDto): WizardState {
 	return {
 		step: "warnings",
 		acknowledged: false,
 		needsRelocation: plan.needsRelocation,
-		names: [],
+		existingNames: plan.existingNames,
+		count: 1,
 	};
+}
+
+/** First `count` auto-generated names (alt2, alt3, …) not already in use. */
+export function generatedNames(existing: string[], count: number): string[] {
+	const names: string[] = [];
+	for (let i = 2; names.length < count; i++) {
+		const candidate = `alt${i}`;
+		if (!existing.includes(candidate)) names.push(candidate);
+	}
+	return names;
 }
 
 export function nextStep(s: WizardState): WizardState {

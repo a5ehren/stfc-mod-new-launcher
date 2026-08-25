@@ -31,13 +31,18 @@ pub fn build_instance_plan(
     mod_library: &Path,
     username: &str,
 ) -> LauncherResult<LaunchPlan> {
-    if !username.starts_with(USER_PREFIX) {
+    let is_base = !username.starts_with(USER_PREFIX);
+    if is_base && username != crate::instance_users::current_username()? {
         return Err(LauncherError::InvalidData {
             context: "building instance launch plan".into(),
             message: format!("refusing non-service username {username:?}"),
         });
     }
     let inner = build_launch_plan(platform, shared_root, mod_library, LaunchMode::Managed)?;
+    // The base account IS the current user: no sudo wrapper needed.
+    if is_base {
+        return Ok(inner);
+    }
     match platform {
         Platform::MacOs => {
             let mut args = vec![
@@ -219,6 +224,38 @@ fn terminate_as_user(
     pid: u32,
     force: bool,
 ) -> LauncherResult<()> {
+    // The base account's processes belong to us — plain kill/taskkill,
+    // no sudoers-scoped sudo or stored credential needed.
+    if username == crate::instance_users::current_username().unwrap_or_default() {
+        let status = match platform {
+            Platform::MacOs => {
+                let mut cmd = Command::new("/bin/kill");
+                if force {
+                    cmd.arg("-9");
+                }
+                cmd.arg(pid.to_string()).status()
+            }
+            Platform::Windows => {
+                let mut cmd = Command::new("taskkill");
+                if force {
+                    cmd.arg("/F");
+                }
+                cmd.args(["/PID", &pid.to_string()]).status()
+            }
+        }
+        .map_err(|e| LauncherError::Io {
+            context: "terminating instance".into(),
+            source: e,
+        })?;
+        return if status.success() {
+            Ok(())
+        } else {
+            Err(LauncherError::Operation {
+                context: "terminating instance".into(),
+                message: format!("kill exited with {status}"),
+            })
+        };
+    }
     match platform {
         Platform::MacOs => {
             let status = Command::new("/usr/bin/sudo")
@@ -373,6 +410,25 @@ fn build_env_block(cmd: &std::process::Command) -> Vec<u16> {
 mod tests {
     use super::*;
     use crate::models::Platform;
+
+    #[test]
+    fn base_account_plan_runs_directly_without_sudo() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let game_root = root.path();
+        std::fs::create_dir_all(game_root.join("Star Trek Fleet Command.app/Contents/MacOS"))
+            .expect("dirs");
+        std::fs::write(
+            game_root.join("Star Trek Fleet Command.app/Contents/MacOS/Star Trek Fleet Command"),
+            "",
+        )
+        .expect("exe");
+        let lib = game_root.join("libstfc-community-mod.dylib");
+        std::fs::write(&lib, "").expect("lib");
+
+        let me = crate::instance_users::current_username().expect("USER env");
+        let plan = build_instance_plan(Platform::MacOs, game_root, &lib, &me).expect("plan");
+        assert!(plan.executable.ends_with("Star Trek Fleet Command"));
+    }
 
     #[test]
     fn mac_instance_plan_sudos_as_user_with_dyld_env() {

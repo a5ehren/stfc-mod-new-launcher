@@ -177,6 +177,27 @@ fn managed_instance(
         })
 }
 
+/// Resolves an instance name to (os_username, is_base). The reserved "base"
+/// name targets the primary account — the OS user the launcher runs as — and
+/// bypasses the managed registry (it is never a provisioned service user).
+fn resolve_instance_target(
+    state: &State<'_, AppState>,
+    name: &str,
+) -> CommandResult<(String, bool)> {
+    if name == crate::instance_users::BASE_INSTANCE_NAME {
+        let persisted = state.persisted.lock().map_err(|_| ErrorDto {
+            kind: "state".into(),
+            message: "launcher state lock is poisoned".into(),
+        })?;
+        if !persisted.multi_instance.enabled {
+            return Err(mi_not_enabled());
+        }
+        let username = crate::instance_users::current_username().map_err(ErrorDto::from)?;
+        return Ok((username, true));
+    }
+    Ok((managed_instance(state, name)?.os_username, false))
+}
+
 /// Copies persisted.multi_instance into the status snapshot after a mutation.
 fn sync_multi_instance_status(state: &State<'_, AppState>) -> CommandResult<()> {
     let mi = {
@@ -217,6 +238,12 @@ pub fn mi_wizard_plan(state: State<'_, AppState>) -> CommandResult<crate::models
         ),
         game_source: persisted.game_path.clone(),
         shared_root,
+        existing_names: persisted
+            .multi_instance
+            .instances
+            .iter()
+            .map(|i| i.name.clone())
+            .collect(),
     })
 }
 
@@ -331,6 +358,7 @@ pub async fn mi_provision(
                     os_username,
                     created_at: chrono::Utc::now(),
                     last_backup_at: None,
+                    label: None,
                 });
         }
     }
@@ -341,10 +369,48 @@ pub async fn mi_provision(
     let mi = persisted.multi_instance.clone();
     drop(persisted);
     sync_multi_instance_status(&state)?;
-    emit_progress(
-        &app,
-        ProgressEvent::message("mi_provision", "complete", "instances provisioned"),
-    );
+    Ok(mi)
+}
+
+#[tauri::command]
+pub fn mi_set_instance_label(
+    state: State<'_, AppState>,
+    name: String,
+    label: String,
+) -> CommandResult<crate::models::MultiInstanceState> {
+    let trimmed = label.trim();
+    if trimmed.chars().count() > 32 || trimmed.chars().any(|c| c.is_control()) {
+        return Err(ErrorDto {
+            kind: "invalidData".into(),
+            message: "label must be at most 32 characters with no control characters".into(),
+        });
+    }
+    let label = (!trimmed.is_empty()).then(|| trimmed.to_string());
+    let mut persisted = state.persisted.lock().map_err(|_| ErrorDto {
+        kind: "state".into(),
+        message: "launcher state lock is poisoned".into(),
+    })?;
+    if !persisted.multi_instance.enabled {
+        return Err(mi_not_enabled());
+    }
+    if name == crate::instance_users::BASE_INSTANCE_NAME {
+        persisted.multi_instance.base_label = label;
+    } else {
+        let instance = persisted
+            .multi_instance
+            .instances
+            .iter_mut()
+            .find(|i| i.name == name)
+            .ok_or_else(|| ErrorDto {
+                kind: "invalidData".into(),
+                message: format!("unknown instance {name:?}"),
+            })?;
+        instance.label = label;
+    }
+    crate::storage::save_state(&state.paths, &persisted).map_err(ErrorDto::from)?;
+    let mi = persisted.multi_instance.clone();
+    drop(persisted);
+    sync_multi_instance_status(&state)?;
     Ok(mi)
 }
 
@@ -371,7 +437,7 @@ pub fn mi_set_enabled(
 #[tauri::command]
 pub async fn mi_start_instance(state: State<'_, AppState>, name: String) -> CommandResult<u32> {
     let (platform, shared_root, username, mod_library, log_file) = {
-        let instance = managed_instance(&state, &name)?;
+        let (username, _is_base) = resolve_instance_target(&state, &name)?;
         let persisted = state.persisted.lock().map_err(|_| ErrorDto {
             kind: "state".into(),
             message: "launcher state lock is poisoned".into(),
@@ -380,7 +446,7 @@ pub async fn mi_start_instance(state: State<'_, AppState>, name: String) -> Comm
         (
             platform,
             instance_shared_root(&persisted.multi_instance)?,
-            instance.os_username,
+            username,
             state
                 .paths
                 .mods_dir
@@ -408,8 +474,8 @@ pub async fn mi_start_instance(state: State<'_, AppState>, name: String) -> Comm
 #[tauri::command]
 pub async fn mi_stop_instance(state: State<'_, AppState>, name: String) -> CommandResult<()> {
     let (platform, username) = {
-        let instance = managed_instance(&state, &name)?;
-        (crate::models::current_platform(), instance.os_username)
+        let (username, _is_base) = resolve_instance_target(&state, &name)?;
+        (crate::models::current_platform(), username)
     };
     tauri::async_runtime::spawn_blocking(move || {
         crate::instance_launch::stop_instance(platform, &username)
@@ -434,27 +500,40 @@ pub fn mi_instance_status(
         return Err(mi_not_enabled());
     }
     let matcher = crate::instance_launch::process_matcher(crate::models::current_platform());
-    persisted
-        .multi_instance
-        .instances
-        .iter()
-        .map(|instance| {
-            let pid = crate::instance_launch::instance_pid(&instance.os_username, matcher)
-                .map_err(ErrorDto::from)?;
-            Ok(crate::models::InstanceStatusDto {
-                name: instance.name.clone(),
-                os_username: instance.os_username.clone(),
-                running: pid.is_some(),
-                pid,
-                last_backup_at: instance.last_backup_at,
-            })
-        })
-        .collect()
+    let mi = &persisted.multi_instance;
+    let mut rows = Vec::with_capacity(mi.instances.len() + 1);
+    // The base account (primary user) is always the first row.
+    let base_username = crate::instance_users::current_username().map_err(ErrorDto::from)?;
+    let base_pid =
+        crate::instance_launch::instance_pid(&base_username, matcher).map_err(ErrorDto::from)?;
+    rows.push(crate::models::InstanceStatusDto {
+        name: crate::instance_users::BASE_INSTANCE_NAME.into(),
+        os_username: base_username,
+        running: base_pid.is_some(),
+        pid: base_pid,
+        last_backup_at: mi.base_last_backup_at,
+        label: mi.base_label.clone(),
+        is_base: true,
+    });
+    for instance in &mi.instances {
+        let pid = crate::instance_launch::instance_pid(&instance.os_username, matcher)
+            .map_err(ErrorDto::from)?;
+        rows.push(crate::models::InstanceStatusDto {
+            name: instance.name.clone(),
+            os_username: instance.os_username.clone(),
+            running: pid.is_some(),
+            pid,
+            last_backup_at: instance.last_backup_at,
+            label: instance.label.clone(),
+            is_base: false,
+        });
+    }
+    Ok(rows)
 }
 
 #[tauri::command]
 pub async fn mi_backup_instance(state: State<'_, AppState>, name: String) -> CommandResult<String> {
-    let username = managed_instance(&state, &name)?.os_username;
+    let (username, is_base) = resolve_instance_target(&state, &name)?;
     let paths = state.paths.clone();
     let backup_name = name.clone();
     let out_dir = tauri::async_runtime::spawn_blocking(move || {
@@ -471,7 +550,9 @@ pub async fn mi_backup_instance(state: State<'_, AppState>, name: String) -> Com
             kind: "state".into(),
             message: "launcher state lock is poisoned".into(),
         })?;
-        if let Some(instance) = persisted
+        if is_base {
+            persisted.multi_instance.base_last_backup_at = Some(chrono::Utc::now());
+        } else if let Some(instance) = persisted
             .multi_instance
             .instances
             .iter_mut()
@@ -491,7 +572,7 @@ pub async fn mi_restore_instance(
     state: State<'_, AppState>,
     name: String,
 ) -> CommandResult<()> {
-    let username = managed_instance(&state, &name)?.os_username;
+    let (username, _is_base) = resolve_instance_target(&state, &name)?;
     let paths = state.paths.clone();
     emit_progress(
         &app,
@@ -515,11 +596,6 @@ pub async fn mi_restore_instance(
 }
 
 /// Deprovision script for one service user (destructive; runs elevated).
-#[cfg(target_os = "macos")]
-fn deprovision_script(username: &str) -> String {
-    format!("dscl . -delete /Users/{username}\nrm -rf /Users/{username}\n")
-}
-
 #[cfg(target_os = "windows")]
 fn deprovision_script(username: &str) -> String {
     format!(
@@ -533,6 +609,12 @@ pub async fn mi_remove_instance(
     name: String,
     force: bool,
 ) -> CommandResult<crate::models::MultiInstanceState> {
+    if name == crate::instance_users::BASE_INSTANCE_NAME {
+        return Err(ErrorDto {
+            kind: "invalidData".into(),
+            message: "the base account cannot be removed".into(),
+        });
+    }
     let (platform, username) = {
         let instance = managed_instance(&state, &name)?;
         (crate::models::current_platform(), instance.os_username)
@@ -543,8 +625,11 @@ pub async fn mi_remove_instance(
     )
     .map_err(ErrorDto::from)?;
     // Stop (ignore "not running" — stop_instance is idempotent), then delete the
-    // OS user via the elevated path. Removal from the registry only happens
-    // after deprovision succeeds, so a failed remove leaves a repairable state.
+    // OS user. On macOS this opens a Terminal window for sysadminctl's secure
+    // password prompt and polls for the record to vanish (provisioning.rs); on
+    // Windows the UAC helper path runs the removal script. Removal from the
+    // registry only happens after deprovision succeeds, so a failed remove
+    // leaves a repairable state.
     let stop_username = username.clone();
     tauri::async_runtime::spawn_blocking(move || {
         crate::instance_launch::stop_instance(platform, &stop_username)
@@ -555,8 +640,17 @@ pub async fn mi_remove_instance(
         message: format!("stop task failed: {err}"),
     })?
     .map_err(ErrorDto::from)?;
-    let script = deprovision_script(&username);
-    tauri::async_runtime::spawn_blocking(move || crate::provisioning::run_elevated(&script))
+    #[cfg(target_os = "macos")]
+    let deprovision = {
+        let username = username.clone();
+        move || crate::provisioning::deprovision_user(&username)
+    };
+    #[cfg(target_os = "windows")]
+    let deprovision = {
+        let script = deprovision_script(&username);
+        move || crate::provisioning::run_elevated(&script)
+    };
+    tauri::async_runtime::spawn_blocking(deprovision)
         .await
         .map_err(|err| ErrorDto {
             kind: "operation".into(),
@@ -1163,8 +1257,10 @@ pub async fn check_mod_update(state: State<'_, AppState>) -> CommandResult<Launc
         message: "launcher status lock is poisoned".into(),
     })?;
     status.mod_status.latest_version = Some(selected.version.clone());
-    status.mod_status.update_available =
-        !library_present || installed_version.as_deref() != Some(selected.version.as_str());
+    status.mod_status.update_available = !library_present
+        || installed_version
+            .as_deref()
+            .is_none_or(|v| crate::github_releases::is_newer_version(&selected.version, v));
     Ok(status.clone())
 }
 

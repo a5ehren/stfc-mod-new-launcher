@@ -66,6 +66,7 @@ pub fn run() {
             commands::mi_backup_instance,
             commands::mi_restore_instance,
             commands::mi_remove_instance,
+            commands::mi_set_instance_label,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

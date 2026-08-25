@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	miInstanceStatus,
 	miRemoveInstance,
+	miSetInstanceLabel,
 	miStartInstance,
 	miStopInstance,
 } from "@/lib/commands";
@@ -12,11 +13,22 @@ import InstancePanel from "./InstancePanel.vue";
 
 const ROWS: InstanceStatusDto[] = [
 	{
+		name: "base",
+		osUsername: "ebendler",
+		running: false,
+		pid: null,
+		lastBackupAt: null,
+		label: null,
+		isBase: true,
+	},
+	{
 		name: "alt2",
 		osUsername: "stfc-alt2",
 		running: true,
 		pid: 1234,
 		lastBackupAt: "2026-08-24T00:00:00Z",
+		label: "Trader",
+		isBase: false,
 	},
 	{
 		name: "alt3",
@@ -24,6 +36,8 @@ const ROWS: InstanceStatusDto[] = [
 		running: false,
 		pid: null,
 		lastBackupAt: null,
+		label: null,
+		isBase: false,
 	},
 ];
 
@@ -34,6 +48,7 @@ vi.mock("@/lib/commands", () => ({
 	miBackupInstance: vi.fn(async () => "/backups/alt2/2026-08-24"),
 	miRestoreInstance: vi.fn(async () => {}),
 	miRemoveInstance: vi.fn(async () => {}),
+	miSetInstanceLabel: vi.fn(async () => {}),
 }));
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({
@@ -104,6 +119,39 @@ describe("InstancePanel", () => {
 		await new Promise((resolve) => setTimeout(resolve, 0));
 
 		expect(miRemoveInstance).not.toHaveBeenCalled();
+	});
+
+	it("shows the base account row with actions but no remove", async () => {
+		const wrapper = await mountPanel();
+		const baseRow = wrapper
+			.findAll(".instance-row")
+			.find((row) => row.text().includes("Primary (you)"));
+		expect(baseRow).toBeDefined();
+		const buttons = baseRow?.findAll("button").map((b) => b.text()) ?? [];
+		expect(buttons).toContain("Start");
+		expect(buttons).toContain("Stop");
+		expect(buttons).toContain("Backup");
+		expect(buttons).toContain("Restore");
+		expect(buttons).not.toContain("Remove");
+	});
+
+	it("shows labels alongside instance names", async () => {
+		const wrapper = await mountPanel();
+		expect(wrapper.text()).toContain("Trader (alt2)");
+	});
+
+	it("renames an instance via inline edit", async () => {
+		const wrapper = await mountPanel();
+		const alt3Row = wrapper
+			.findAll(".instance-row")
+			.find((row) => row.text().includes("alt3"));
+		await alt3Row?.find(".name").trigger("click");
+		const input = alt3Row?.find(".label-input");
+		expect(input?.exists()).toBe(true);
+		await input?.setValue("Miner");
+		await input?.trigger("keydown.enter");
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(miSetInstanceLabel).toHaveBeenCalledWith("alt3", "Miner");
 	});
 
 	it("start and stop are mutually exclusive per running state", async () => {

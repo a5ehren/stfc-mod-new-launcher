@@ -133,3 +133,7 @@ export function miRestoreInstance(name: string): Promise<void> {
 export function miRemoveInstance(name: string, force: boolean): Promise<void> {
 	return invoke("mi_remove_instance", { name, force });
 }
+
+export function miSetInstanceLabel(name: string, label: string): Promise<void> {
+	return invoke("mi_set_instance_label", { name, label });
+}

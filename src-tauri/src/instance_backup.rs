@@ -21,12 +21,22 @@ pub fn latest_backup(paths: &ManagedPaths, name: &str) -> Option<PathBuf> {
         .max() // ISO-8601 dir names sort lexicographically
 }
 
-/// Command argv lists; each runs as the service user and writes to STDOUT so
-/// the launcher (primary user) owns the resulting backup files directly —
-/// no cross-user file handoff. `defaults export … -` and `tar -cf -` both
-/// stream to stdout.
+/// The sudo run-as prefix is only needed for cross-user access; backing up
+/// the base account (ourselves) runs the tools directly.
+fn sudo_prefix(username: &str) -> Vec<String> {
+    if username == crate::instance_users::current_username().unwrap_or_default() {
+        vec!["env".into()]
+    } else {
+        vec!["sudo".into(), "-Hu".into(), username.into(), "env".into()]
+    }
+}
+
+/// Command argv lists; each writes to STDOUT so the launcher (primary user)
+/// owns the resulting backup files directly — no cross-user file handoff.
+/// `defaults export … -` and `tar -cf -` both stream to stdout. Cross-user
+/// runs go through the scoped sudoers prefix; the base account runs direct.
 pub fn macos_backup_commands(username: &str, home: &Path) -> Vec<Vec<String>> {
-    let prefix = || vec!["sudo".into(), "-Hu".into(), username.into(), "env".into()];
+    let prefix = || sudo_prefix(username);
     let mut defaults = prefix();
     defaults.extend([
         "/usr/bin/defaults".into(),
@@ -48,11 +58,12 @@ pub fn macos_backup_commands(username: &str, home: &Path) -> Vec<Vec<String>> {
     vec![defaults, tar]
 }
 
-/// Restore argv lists; stdin carries the archive/plist contents. Runs as the
-/// service user through the scoped sudoers entry (env(1) runs the real tool,
-/// including /bin/sh for the staged plist import).
+/// Restore argv lists; stdin carries the archive/plist contents. Cross-user
+/// runs go through the scoped sudoers entry (env(1) runs the real tool,
+/// including /bin/sh for the staged plist import); the base account runs
+/// the tools directly as the current user.
 pub fn macos_restore_commands(username: &str, home: &Path) -> Vec<Vec<String>> {
-    let prefix = || vec!["sudo".into(), "-Hu".into(), username.into(), "env".into()];
+    let prefix = || sudo_prefix(username);
     // Freshly re-provisioned instances have no session dir yet — tar -C fails
     // on a missing target, which is exactly the lost-account recovery path.
     let mut mkdir = prefix();
@@ -259,6 +270,48 @@ pub fn backup_instance(
         context: "creating backup dir".into(),
         source: e,
     })?;
+    if username == crate::instance_users::current_username().unwrap_or_default() {
+        // Base account: our own hive is always loaded and our files are
+        // readable — export/copy straight into the backup dir, no staging
+        // dir or stored credential. robocopy exit codes 0-7 are success.
+        let reg = Command::new("reg.exe")
+            .arg("export")
+            .arg(format!(
+                r"HKCU\{}",
+                crate::windows_targets::PLAYERPREFS_REG_KEY
+            ))
+            .arg(out_dir.join("account.reg"))
+            .arg("/y")
+            .status()
+            .map_err(|e| LauncherError::Io {
+                context: "exporting account key".into(),
+                source: e,
+            })?;
+        if !reg.success() {
+            return Err(LauncherError::Operation {
+                context: "backup".into(),
+                message: format!("reg export exited with {reg}"),
+            });
+        }
+        let home = service_user_home(username)?;
+        let copy = Command::new("robocopy")
+            .arg(home.join(crate::windows_targets::SESSION_DIR_RELATIVE))
+            .arg(out_dir.join("sessions"))
+            .arg("/E")
+            .status()
+            .map_err(|e| LauncherError::Io {
+                context: "copying session files".into(),
+                source: e,
+            })?;
+        if copy.code().unwrap_or(8) >= 8 {
+            return Err(LauncherError::Operation {
+                context: "backup".into(),
+                message: format!("robocopy exited with {copy}"),
+            });
+        }
+        restrict_to_current_user(&out_dir)?;
+        return Ok(out_dir);
+    }
     let staging = Path::new(r"C:\Users\Public\stfc-mi-staging").join(name);
     let staged_reg = staging.join("account.reg");
     let staged_sessions = staging.join("sessions");
@@ -314,6 +367,41 @@ pub fn restore_instance(paths: &ManagedPaths, name: &str, username: &str) -> Lau
         message: format!("no backup found for instance {name}"),
     })?;
     stop_before_restore(username)?;
+    if username == crate::instance_users::current_username().unwrap_or_default() {
+        // Base account: own hive is loaded and HKCU paths match the backup
+        // as-is — direct import + copy, no elevation.
+        let reg = Command::new("reg.exe")
+            .arg("import")
+            .arg(backup.join("account.reg"))
+            .status()
+            .map_err(|e| LauncherError::Io {
+                context: "importing account key".into(),
+                source: e,
+            })?;
+        if !reg.success() {
+            return Err(LauncherError::Operation {
+                context: "restore".into(),
+                message: format!("reg import exited with {reg}"),
+            });
+        }
+        let home = service_user_home(username)?;
+        let copy = Command::new("robocopy")
+            .arg(backup.join("sessions"))
+            .arg(home.join(crate::windows_targets::SESSION_DIR_RELATIVE))
+            .arg("/E")
+            .status()
+            .map_err(|e| LauncherError::Io {
+                context: "restoring session files".into(),
+                source: e,
+            })?;
+        if copy.code().unwrap_or(8) >= 8 {
+            return Err(LauncherError::Operation {
+                context: "restore".into(),
+                message: format!("robocopy exited with {copy}"),
+            });
+        }
+        return Ok(());
+    }
     let reg_text =
         std::fs::read_to_string(backup.join("account.reg")).map_err(|e| LauncherError::Io {
             context: "reading account.reg".into(),

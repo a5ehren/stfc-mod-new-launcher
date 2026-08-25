@@ -133,6 +133,8 @@ describe("MainLauncher", () => {
 				running: false,
 				pid: null,
 				lastBackupAt: null,
+				label: null,
+				isBase: false,
 			},
 		]);
 
@@ -169,6 +171,7 @@ describe("MainLauncher", () => {
 				launchMode: "managed",
 			},
 			launcherUpdateAvailable: false,
+			multiInstance: { enabled: false, sharedGameRoot: null, instances: [] },
 		});
 
 		const wrapper = mount(MainLauncher);
@@ -196,6 +199,7 @@ describe("MainLauncher", () => {
 				launchMode: "managed",
 			},
 			launcherUpdateAvailable: false,
+			multiInstance: { enabled: false, sharedGameRoot: null, instances: [] },
 		});
 		vi.mocked(launchGame).mockRejectedValueOnce(new Error("missing dylib"));
 
@@ -226,6 +230,7 @@ describe("MainLauncher", () => {
 				launchMode: "managed",
 			},
 			launcherUpdateAvailable: false,
+			multiInstance: { enabled: false, sharedGameRoot: null, instances: [] },
 		});
 		vi.mocked(launchGame).mockRejectedValueOnce({
 			kind: "invalidData",
@@ -276,6 +281,7 @@ describe("MainLauncher", () => {
 				launchMode: "managed",
 			},
 			launcherUpdateAvailable: false,
+			multiInstance: { enabled: false, sharedGameRoot: null, instances: [] },
 		});
 		vi.mocked(launchGame)
 			.mockRejectedValueOnce({
@@ -308,6 +314,7 @@ describe("MainLauncher", () => {
 				launchMode: "managed",
 			},
 			launcherUpdateAvailable: false,
+			multiInstance: { enabled: false, sharedGameRoot: null, instances: [] },
 		});
 
 		const wrapper = mount(MainLauncher);
@@ -339,6 +346,7 @@ describe("MainLauncher", () => {
 				launchMode: "managed",
 			},
 			launcherUpdateAvailable: false,
+			multiInstance: { enabled: false, sharedGameRoot: null, instances: [] },
 		});
 		vi.mocked(updateGame)
 			.mockRejectedValueOnce({
@@ -371,6 +379,7 @@ describe("MainLauncher", () => {
 				launchMode: "managed",
 			},
 			launcherUpdateAvailable: false,
+			multiInstance: { enabled: false, sharedGameRoot: null, instances: [] },
 		});
 
 		const wrapper = mount(MainLauncher);

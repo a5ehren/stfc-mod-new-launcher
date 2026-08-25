@@ -5,8 +5,9 @@ import LcarsShell from "@/components/lcars/LcarsShell.vue";
 import { miProvision, miWizardPlan, onProgress } from "@/lib/commands";
 import { formatError } from "@/lib/formatError";
 import {
-	INSTANCE_NAME_PATTERN,
+	generatedNames,
 	initialWizardState,
+	MAX_INSTANCES,
 	nextStep,
 	type WizardState,
 } from "@/lib/multiInstanceWizard";
@@ -19,36 +20,27 @@ const state = ref<WizardState | null>(null);
 const progressMessage = ref("");
 const error = ref("");
 const provisioning = ref(false);
-const newName = ref("");
+const doneCount = ref(0);
 let unlistenProgress: (() => void) | null = null;
 
-const names = computed(() => state.value?.names ?? []);
-const invalidName = computed(() => {
-	const n = newName.value.trim();
-	return n !== "" && !INSTANCE_NAME_PATTERN.test(n);
+const count = computed({
+	get: () => state.value?.count ?? 1,
+	set: (v) => {
+		if (!state.value) return;
+		const n = Math.trunc(Number(v));
+		state.value = {
+			...state.value,
+			count: Number.isFinite(n) ? Math.min(Math.max(n, 1), MAX_INSTANCES) : 1,
+		};
+	},
 });
-const provisionDisabled = computed(
-	() => provisioning.value || names.value.length === 0,
+const names = computed(() =>
+	generatedNames(state.value?.existingNames ?? [], count.value),
 );
+const provisionDisabled = computed(() => provisioning.value);
 
 function advance() {
 	if (state.value) state.value = nextStep(state.value);
-}
-
-function addName() {
-	if (!state.value) return;
-	const n = newName.value.trim();
-	if (!INSTANCE_NAME_PATTERN.test(n) || state.value.names.includes(n)) return;
-	state.value = { ...state.value, names: [...state.value.names, n] };
-	newName.value = "";
-}
-
-function removeName(name: string) {
-	if (!state.value) return;
-	state.value = {
-		...state.value,
-		names: state.value.names.filter((n) => n !== name),
-	};
 }
 
 async function provision() {
@@ -56,6 +48,7 @@ async function provision() {
 	error.value = "";
 	provisioning.value = true;
 	try {
+		doneCount.value = names.value.length;
 		await miProvision(names.value);
 		state.value = nextStep(state.value);
 	} catch (e) {
@@ -135,28 +128,25 @@ onBeforeUnmount(() => {
 
       <section v-else-if="state?.step === 'instances'" class="step">
         <h2>Create instances</h2>
-        <p>Name each extra instance (lowercase letters, digits, dashes).</p>
-        <div class="name-entry">
+        <p>How many extra game instances do you want to run?</p>
+        <p>
+          These are ADDITIONAL instances, each running as its own hidden user.
+          The main "Launch Game" button still launches the game as you, the
+          current user — start and stop the extra instances from the Instances
+          panel.
+        </p>
+        <div class="count-entry">
           <input
-            v-model="newName"
-            class="name-input"
-            :class="{ invalid: invalidName }"
-            placeholder="alt2"
-            maxlength="16"
+            v-model.number="count"
+            class="count-input"
+            type="number"
+            min="1"
+            :max="MAX_INSTANCES"
             :disabled="provisioning"
-            @keydown.enter="addName"
           />
-          <LcarsButton tone="tan" edge="single" :disabled="!newName.trim() || invalidName || provisioning" @click="addName">
-            Add
-          </LcarsButton>
+          <span>instance{{ count === 1 ? "" : "s" }}</span>
         </div>
-        <p v-if="invalidName" class="error">Names must be 1-16 chars of a-z, 0-9, -</p>
-        <ul class="name-list">
-          <li v-for="name in names" :key="name">
-            <span>stfc-{{ name }}</span>
-            <button class="remove" :disabled="provisioning" @click="removeName(name)">remove</button>
-          </li>
-        </ul>
+        <p class="names-preview">Creates: {{ names.map((n) => `stfc-${n}`).join(", ") }}</p>
         <p v-if="progressMessage" class="progress">{{ progressMessage }}</p>
         <div class="step-actions">
           <LcarsButton tone="orange" edge="single" :disabled="provisionDisabled" @click="provision">
@@ -169,7 +159,7 @@ onBeforeUnmount(() => {
       <section v-else-if="state?.step === 'done'" class="step">
         <h2>Multi-instance mode enabled</h2>
         <p>
-          {{ names.length }} instance{{ names.length === 1 ? "" : "s" }} provisioned.
+          {{ doneCount }} instance{{ doneCount === 1 ? "" : "s" }} provisioned.
           Start, stop, and back them up from the Instances panel on the main screen.
         </p>
         <p>
@@ -223,40 +213,22 @@ onBeforeUnmount(() => {
 .progress {
   color: var(--lcars-gold);
 }
-.name-entry {
+.count-entry {
   display: flex;
   gap: 8px;
   align-items: center;
 }
-.name-input {
+.count-input {
   background: #000;
   border: 2px solid var(--lcars-blue);
   border-radius: 8px;
   color: #fff;
   padding: 8px 12px;
   font-size: 16px;
+  width: 90px;
 }
-.name-input.invalid {
-  border-color: var(--lcars-red);
-}
-.name-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.name-list li {
-  display: flex;
-  justify-content: space-between;
-  gap: 24px;
-}
-.remove {
-  background: none;
-  border: 0;
-  color: var(--lcars-red);
-  cursor: pointer;
-  text-transform: uppercase;
+.names-preview {
+  color: var(--lcars-tan);
+  font-family: monospace;
 }
 </style>
