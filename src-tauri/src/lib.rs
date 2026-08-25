@@ -7,13 +7,19 @@ pub mod events;
 mod game_locator;
 mod game_updater;
 mod github_releases;
+mod instance_backup;
+mod instance_launch;
+mod instance_users;
 mod launch;
 mod migration;
 mod mod_manager;
 pub mod models;
+mod provisioning;
 mod rsync_patch;
 mod self_update;
 mod storage;
+#[cfg(target_os = "windows")]
+mod windows_targets;
 mod xsolla;
 
 use tauri::Manager;
@@ -51,6 +57,15 @@ pub fn run() {
             commands::check_game_update,
             commands::install_launcher_update,
             commands::check_launcher_update,
+            commands::mi_wizard_plan,
+            commands::mi_provision,
+            commands::mi_set_enabled,
+            commands::mi_start_instance,
+            commands::mi_stop_instance,
+            commands::mi_instance_status,
+            commands::mi_backup_instance,
+            commands::mi_restore_instance,
+            commands::mi_remove_instance,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

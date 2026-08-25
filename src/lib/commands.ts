@@ -1,11 +1,14 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type {
+	InstanceStatusDto,
 	LauncherStatus,
 	LauncherUpdateInfo,
 	LegacyCleanupPlan,
 	ModChannel,
+	MultiInstanceState,
 	ProgressEvent,
+	WizardPlanDto,
 } from "@/types/launcher";
 
 export function getLauncherStatus(): Promise<LauncherStatus> {
@@ -93,4 +96,40 @@ export function onProgress(
 	return listen<ProgressEvent>("launcher://progress", (event) =>
 		callback(event.payload),
 	);
+}
+
+export function miWizardPlan(): Promise<WizardPlanDto> {
+	return invoke("mi_wizard_plan");
+}
+
+export function miProvision(names: string[]): Promise<MultiInstanceState> {
+	return invoke("mi_provision", { names });
+}
+
+export function miSetEnabled(enabled: boolean): Promise<void> {
+	return invoke("mi_set_enabled", { enabled });
+}
+
+export function miStartInstance(name: string): Promise<number> {
+	return invoke("mi_start_instance", { name });
+}
+
+export function miStopInstance(name: string): Promise<void> {
+	return invoke("mi_stop_instance", { name });
+}
+
+export function miInstanceStatus(): Promise<InstanceStatusDto[]> {
+	return invoke("mi_instance_status");
+}
+
+export function miBackupInstance(name: string): Promise<string> {
+	return invoke("mi_backup_instance", { name });
+}
+
+export function miRestoreInstance(name: string): Promise<void> {
+	return invoke("mi_restore_instance", { name });
+}
+
+export function miRemoveInstance(name: string, force: boolean): Promise<void> {
+	return invoke("mi_remove_instance", { name, force });
 }

@@ -2,6 +2,7 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import InstancePanel from "@/components/InstancePanel.vue";
 import LcarsButton from "@/components/lcars/LcarsButton.vue";
 import LcarsShell from "@/components/lcars/LcarsShell.vue";
 import StatusStrip from "@/components/StatusStrip.vue";
@@ -23,9 +24,11 @@ import {
 } from "@/lib/commands";
 import { formatError } from "@/lib/formatError";
 import type { LauncherStatus } from "@/types/launcher";
+import MultiInstanceWizard from "@/views/MultiInstanceWizard.vue";
 
 const status = ref<LauncherStatus | null>(null);
 const message = ref("Initializing launcher");
+const showWizard = ref(false);
 let unlistenProgress: (() => void) | null = null;
 
 const channelLabel = computed(() =>
@@ -219,6 +222,11 @@ async function runCommandWithGamePathFallback<T>(
 	}
 }
 
+async function onWizardDone() {
+	showWizard.value = false;
+	await refresh();
+}
+
 onMounted(async () => {
 	unlistenProgress = await onProgress((event) => {
 		message.value = event.message;
@@ -233,9 +241,11 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <LcarsShell banner-text="STFC Community Mod Launcher" compact-header>
+  <MultiInstanceWizard v-if="showWizard" @done="onWizardDone" />
+  <LcarsShell v-else banner-text="STFC Community Mod Launcher" compact-header>
     <div class="main-grid">
       <div class="footer-actions">
+        <InstancePanel v-if="status?.multiInstance?.enabled" />
         <div class="primary-row">
           <div class="button-cell">
             <LcarsButton tone="violet" edge="left" @click="openRawConfig">Open Raw Config</LcarsButton>
@@ -247,6 +257,10 @@ onBeforeUnmount(() => {
           <div class="separator" aria-hidden="true"></div>
           <div class="button-cell">
             <LcarsButton tone="red" edge="middle" @click="openLogs">Open Logs</LcarsButton>
+          </div>
+          <div class="separator" aria-hidden="true"></div>
+          <div class="button-cell">
+            <LcarsButton tone="blue" edge="middle" @click="showWizard = true">Multi-Instance</LcarsButton>
           </div>
           <div class="separator" aria-hidden="true"></div>
           <div class="launch-cell">
@@ -287,7 +301,7 @@ onBeforeUnmount(() => {
 }
 .primary-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 4px minmax(0, 1fr) 4px minmax(0, 1fr) 4px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 4px minmax(0, 1fr) 4px minmax(0, 1fr) 4px minmax(0, 1fr) 4px minmax(0, 1fr);
   align-items: end;
 }
 .button-cell {

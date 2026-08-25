@@ -44,6 +44,7 @@ impl AppState {
                     launch_mode: persisted.launch_mode,
                 },
                 launcher_update_available: false,
+                multi_instance: persisted.multi_instance.clone(),
             }),
             persisted: Mutex::new(persisted),
         })
@@ -136,6 +137,7 @@ mod tests {
             installed_mod_version: Some("v1.2.3".into()),
             installed_mod_checksum: Some("abc123".into()),
             launch_mode: LaunchMode::WindowsProxyDll,
+            multi_instance: Default::default(),
         };
         save_state(&paths, &persisted).expect("save state");
 

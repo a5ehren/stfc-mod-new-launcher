@@ -1,5 +1,5 @@
 use crate::app_state::AppState;
-use crate::errors::{ErrorDto, LauncherResult};
+use crate::errors::{ErrorDto, LauncherError, LauncherResult};
 use crate::events::ProgressEvent;
 use crate::models::LauncherStatus;
 use std::future::Future;
@@ -63,6 +63,14 @@ pub fn set_game_path(
     state: State<'_, AppState>,
     path: String,
 ) -> CommandResult<crate::models::LauncherStatus> {
+    let mi_enabled = {
+        let persisted = state.persisted.lock().map_err(|_| ErrorDto {
+            kind: "state".into(),
+            message: "launcher state lock is poisoned".into(),
+        })?;
+        persisted.multi_instance.enabled
+    };
+    game_path_lock_check(mi_enabled)?;
     let game_path = PathBuf::from(path);
     let validated = crate::game_locator::GameLocator::new(crate::models::current_platform())
         .validate_manual_root(game_path)
@@ -90,6 +98,484 @@ where
     save(&updated)?;
     *persisted = updated;
     Ok(())
+}
+
+// --- Multi-instance mode (spec: docs/superpowers/specs/2026-08-24-multi-instance-mode-design.md)
+
+/// F3: while multi-instance mode is enabled, game_path is pinned to the
+/// shared install — the manual game-path picker must not repoint it.
+fn game_path_lock_check(multi_instance_enabled: bool) -> Result<(), ErrorDto> {
+    if multi_instance_enabled {
+        Err(ErrorDto {
+            kind: "gamePath".into(),
+            message: "game path is locked to the shared install while multi-instance mode is enabled; disable multi-instance first".into(),
+        })
+    } else {
+        Ok(())
+    }
+}
+
+/// F2b: under multi-instance mode the shared install is the only legal game
+/// root — a stale persisted path must error rather than re-discover the
+/// original install from the primary user's home (split-brain).
+fn home_rediscovery_allowed(multi_instance_enabled: bool) -> bool {
+    !multi_instance_enabled
+}
+
+fn remove_guard(has_backup: bool, force: bool) -> LauncherResult<()> {
+    if has_backup || force {
+        Ok(())
+    } else {
+        Err(LauncherError::InvalidData {
+            context: "removing instance".into(),
+            message: "no account backup exists; run a backup first or pass force".into(),
+        })
+    }
+}
+
+fn update_gate(running: &[bool]) -> LauncherResult<()> {
+    if running.iter().any(|r| *r) {
+        Err(LauncherError::InvalidData {
+            context: "updating game".into(),
+            message: "stop all game instances before updating (they share one install)".into(),
+        })
+    } else {
+        Ok(())
+    }
+}
+
+fn mi_not_enabled() -> ErrorDto {
+    ErrorDto {
+        kind: "invalidData".into(),
+        message: "multi-instance mode is not enabled".into(),
+    }
+}
+
+/// Locks persisted state, requires multi-instance mode enabled, and returns
+/// the registered instance with `name` (managed-registry enforcement, FR-8.1).
+fn managed_instance(
+    state: &State<'_, AppState>,
+    name: &str,
+) -> CommandResult<crate::models::Instance> {
+    let persisted = state.persisted.lock().map_err(|_| ErrorDto {
+        kind: "state".into(),
+        message: "launcher state lock is poisoned".into(),
+    })?;
+    if !persisted.multi_instance.enabled {
+        return Err(mi_not_enabled());
+    }
+    persisted
+        .multi_instance
+        .instances
+        .iter()
+        .find(|i| i.name == name)
+        .filter(|i| crate::instance_users::is_managed(&persisted.multi_instance, &i.os_username))
+        .cloned()
+        .ok_or_else(|| ErrorDto {
+            kind: "invalidData".into(),
+            message: format!("unknown instance {name:?}"),
+        })
+}
+
+/// Copies persisted.multi_instance into the status snapshot after a mutation.
+fn sync_multi_instance_status(state: &State<'_, AppState>) -> CommandResult<()> {
+    let mi = {
+        let persisted = state.persisted.lock().map_err(|_| ErrorDto {
+            kind: "state".into(),
+            message: "launcher state lock is poisoned".into(),
+        })?;
+        persisted.multi_instance.clone()
+    };
+    let mut status = state.status.lock().map_err(|_| ErrorDto {
+        kind: "state".into(),
+        message: "launcher status lock is poisoned".into(),
+    })?;
+    status.multi_instance = mi;
+    Ok(())
+}
+
+fn instance_shared_root(mi: &crate::models::MultiInstanceState) -> CommandResult<PathBuf> {
+    mi.shared_game_root.clone().ok_or_else(|| ErrorDto {
+        kind: "invalidData".into(),
+        message: "multi-instance shared game root is not configured".into(),
+    })
+}
+
+#[tauri::command]
+pub fn mi_wizard_plan(state: State<'_, AppState>) -> CommandResult<crate::models::WizardPlanDto> {
+    let persisted = state.persisted.lock().map_err(|_| ErrorDto {
+        kind: "state".into(),
+        message: "launcher state lock is poisoned".into(),
+    })?;
+    let shared_root = crate::provisioning::default_shared_root(crate::models::current_platform());
+    let status =
+        crate::provisioning::relocation_status(persisted.game_path.as_deref(), &shared_root);
+    Ok(crate::models::WizardPlanDto {
+        needs_relocation: matches!(
+            status,
+            crate::provisioning::RelocationStatus::NeedsMove { .. }
+        ),
+        game_source: persisted.game_path.clone(),
+        shared_root,
+    })
+}
+
+#[tauri::command]
+pub async fn mi_provision(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    names: Vec<String>,
+) -> CommandResult<crate::models::MultiInstanceState> {
+    if names.is_empty() {
+        return Err(ErrorDto {
+            kind: "invalidData".into(),
+            message: "no instance names given".into(),
+        });
+    }
+    for name in &names {
+        crate::instance_users::validate_instance_name(name).map_err(ErrorDto::from)?;
+    }
+    let (primary_user, game_source, shared_root) = {
+        let persisted = state.persisted.lock().map_err(|_| ErrorDto {
+            kind: "state".into(),
+            message: "launcher state lock is poisoned".into(),
+        })?;
+        let user = std::env::var("USER")
+            .or_else(|_| std::env::var("USERNAME"))
+            .unwrap_or_default();
+        (
+            user,
+            persisted.game_path.clone(),
+            crate::provisioning::default_shared_root(crate::models::current_platform()),
+        )
+    };
+    emit_progress(
+        &app,
+        ProgressEvent::message(
+            "mi_provision",
+            "elevating",
+            "Provisioning instances (admin password required)\u{2026}",
+        ),
+    );
+    #[cfg(target_os = "macos")]
+    let script = crate::provisioning::macos_provision_script(
+        &primary_user,
+        game_source.as_deref().unwrap_or(std::path::Path::new("")),
+        &shared_root,
+        &names,
+    );
+    #[cfg(target_os = "windows")]
+    let script = {
+        let mut passwords = Vec::with_capacity(names.len());
+        for _ in &names {
+            passwords.push(crate::provisioning::generate_password().map_err(ErrorDto::from)?);
+        }
+        for (name, pw) in names.iter().zip(&passwords) {
+            crate::provisioning::store_windows_password(
+                &crate::instance_users::os_username(name),
+                pw,
+            )
+            .map_err(ErrorDto::from)?;
+        }
+        crate::provisioning::windows_provision_script(
+            game_source.as_deref().unwrap_or(std::path::Path::new("")),
+            &shared_root,
+            &names,
+            &passwords,
+        )
+    };
+    tauri::async_runtime::spawn_blocking(move || crate::provisioning::run_elevated(&script))
+        .await
+        .map_err(|err| ErrorDto {
+            kind: "operation".into(),
+            message: format!("provision task failed: {err}"),
+        })?
+        .map_err(ErrorDto::from)?;
+    // F2a: verify the relocated payload before re-pinning game_path (D-2) —
+    // a partial ditto must not enable the mode. Skipped when the game already
+    // lived at the shared root (no relocation happened).
+    if let Some(source) = &game_source {
+        if source != &shared_root && source.is_dir() {
+            let source_count = crate::provisioning::file_count(source).map_err(ErrorDto::from)?;
+            let shared_count =
+                crate::provisioning::file_count(&shared_root).map_err(ErrorDto::from)?;
+            if source_count != shared_count {
+                return Err(ErrorDto {
+                    kind: "operation".into(),
+                    message: format!(
+                        "shared install verification failed: {} has {shared_count} files but the source {} has {source_count}; re-run the wizard",
+                        shared_root.display(),
+                        source.display()
+                    ),
+                });
+            }
+        }
+    }
+    let mut persisted = state.persisted.lock().map_err(|_| ErrorDto {
+        kind: "state".into(),
+        message: "launcher state lock is poisoned".into(),
+    })?;
+    for name in &names {
+        let os_username = crate::instance_users::os_username(name);
+        if !persisted
+            .multi_instance
+            .instances
+            .iter()
+            .any(|i| i.os_username == os_username)
+        {
+            persisted
+                .multi_instance
+                .instances
+                .push(crate::models::Instance {
+                    name: name.clone(),
+                    os_username,
+                    created_at: chrono::Utc::now(),
+                    last_backup_at: None,
+                });
+        }
+    }
+    persisted.game_path = Some(shared_root.clone());
+    persisted.multi_instance.shared_game_root = Some(shared_root);
+    persisted.multi_instance.enabled = true;
+    crate::storage::save_state(&state.paths, &persisted).map_err(ErrorDto::from)?;
+    let mi = persisted.multi_instance.clone();
+    drop(persisted);
+    sync_multi_instance_status(&state)?;
+    emit_progress(
+        &app,
+        ProgressEvent::message("mi_provision", "complete", "instances provisioned"),
+    );
+    Ok(mi)
+}
+
+#[tauri::command]
+pub fn mi_set_enabled(
+    state: State<'_, AppState>,
+    enabled: bool,
+) -> CommandResult<crate::models::MultiInstanceState> {
+    let mut persisted = state.persisted.lock().map_err(|_| ErrorDto {
+        kind: "state".into(),
+        message: "launcher state lock is poisoned".into(),
+    })?;
+    if !persisted.multi_instance.enabled {
+        return Err(mi_not_enabled());
+    }
+    persisted.multi_instance.enabled = enabled;
+    crate::storage::save_state(&state.paths, &persisted).map_err(ErrorDto::from)?;
+    let mi = persisted.multi_instance.clone();
+    drop(persisted);
+    sync_multi_instance_status(&state)?;
+    Ok(mi)
+}
+
+#[tauri::command]
+pub async fn mi_start_instance(state: State<'_, AppState>, name: String) -> CommandResult<u32> {
+    let (platform, shared_root, username, mod_library, log_file) = {
+        let instance = managed_instance(&state, &name)?;
+        let persisted = state.persisted.lock().map_err(|_| ErrorDto {
+            kind: "state".into(),
+            message: "launcher state lock is poisoned".into(),
+        })?;
+        let platform = crate::models::current_platform();
+        (
+            platform,
+            instance_shared_root(&persisted.multi_instance)?,
+            instance.os_username,
+            state
+                .paths
+                .mods_dir
+                .join(crate::mod_manager::platform_library_name(platform)),
+            state.paths.logs_dir.join(format!("instance-{name}.log")),
+        )
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::instance_launch::start_instance(
+            platform,
+            &shared_root,
+            &mod_library,
+            &username,
+            &log_file,
+        )
+    })
+    .await
+    .map_err(|err| ErrorDto {
+        kind: "operation".into(),
+        message: format!("start task failed: {err}"),
+    })?
+    .map_err(ErrorDto::from)
+}
+
+#[tauri::command]
+pub async fn mi_stop_instance(state: State<'_, AppState>, name: String) -> CommandResult<()> {
+    let (platform, username) = {
+        let instance = managed_instance(&state, &name)?;
+        (crate::models::current_platform(), instance.os_username)
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::instance_launch::stop_instance(platform, &username)
+    })
+    .await
+    .map_err(|err| ErrorDto {
+        kind: "operation".into(),
+        message: format!("stop task failed: {err}"),
+    })?
+    .map_err(ErrorDto::from)
+}
+
+#[tauri::command]
+pub fn mi_instance_status(
+    state: State<'_, AppState>,
+) -> CommandResult<Vec<crate::models::InstanceStatusDto>> {
+    let persisted = state.persisted.lock().map_err(|_| ErrorDto {
+        kind: "state".into(),
+        message: "launcher state lock is poisoned".into(),
+    })?;
+    if !persisted.multi_instance.enabled {
+        return Err(mi_not_enabled());
+    }
+    let matcher = crate::instance_launch::process_matcher(crate::models::current_platform());
+    persisted
+        .multi_instance
+        .instances
+        .iter()
+        .map(|instance| {
+            let pid = crate::instance_launch::instance_pid(&instance.os_username, matcher)
+                .map_err(ErrorDto::from)?;
+            Ok(crate::models::InstanceStatusDto {
+                name: instance.name.clone(),
+                os_username: instance.os_username.clone(),
+                running: pid.is_some(),
+                pid,
+                last_backup_at: instance.last_backup_at,
+            })
+        })
+        .collect()
+}
+
+#[tauri::command]
+pub async fn mi_backup_instance(state: State<'_, AppState>, name: String) -> CommandResult<String> {
+    let username = managed_instance(&state, &name)?.os_username;
+    let paths = state.paths.clone();
+    let backup_name = name.clone();
+    let out_dir = tauri::async_runtime::spawn_blocking(move || {
+        crate::instance_backup::backup_instance(&paths, &backup_name, &username)
+    })
+    .await
+    .map_err(|err| ErrorDto {
+        kind: "operation".into(),
+        message: format!("backup task failed: {err}"),
+    })?
+    .map_err(ErrorDto::from)?;
+    {
+        let mut persisted = state.persisted.lock().map_err(|_| ErrorDto {
+            kind: "state".into(),
+            message: "launcher state lock is poisoned".into(),
+        })?;
+        if let Some(instance) = persisted
+            .multi_instance
+            .instances
+            .iter_mut()
+            .find(|i| i.name == name)
+        {
+            instance.last_backup_at = Some(chrono::Utc::now());
+        }
+        crate::storage::save_state(&state.paths, &persisted).map_err(ErrorDto::from)?;
+    }
+    sync_multi_instance_status(&state)?;
+    Ok(out_dir.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub async fn mi_restore_instance(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    name: String,
+) -> CommandResult<()> {
+    let username = managed_instance(&state, &name)?.os_username;
+    let paths = state.paths.clone();
+    emit_progress(
+        &app,
+        ProgressEvent::message("mi_restore", "restoring", format!("restoring {name}")),
+    );
+    // restore_instance stops the instance itself (idempotent); do not double-stop.
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::instance_backup::restore_instance(&paths, &name, &username)
+    })
+    .await
+    .map_err(|err| ErrorDto {
+        kind: "operation".into(),
+        message: format!("restore task failed: {err}"),
+    })?
+    .map_err(ErrorDto::from)?;
+    emit_progress(
+        &app,
+        ProgressEvent::message("mi_restore", "complete", "restore complete"),
+    );
+    Ok(())
+}
+
+/// Deprovision script for one service user (destructive; runs elevated).
+#[cfg(target_os = "macos")]
+fn deprovision_script(username: &str) -> String {
+    format!("dscl . -delete /Users/{username}\nrm -rf /Users/{username}\n")
+}
+
+#[cfg(target_os = "windows")]
+fn deprovision_script(username: &str) -> String {
+    format!(
+        "Remove-LocalUser '{username}'\nGet-CimInstance Win32_UserProfile | Where-Object {{ $_.LocalPath -like '*{username}' }} | Remove-CimInstance\n"
+    )
+}
+
+#[tauri::command]
+pub async fn mi_remove_instance(
+    state: State<'_, AppState>,
+    name: String,
+    force: bool,
+) -> CommandResult<crate::models::MultiInstanceState> {
+    let (platform, username) = {
+        let instance = managed_instance(&state, &name)?;
+        (crate::models::current_platform(), instance.os_username)
+    };
+    remove_guard(
+        crate::instance_backup::latest_backup(&state.paths, &name).is_some(),
+        force,
+    )
+    .map_err(ErrorDto::from)?;
+    // Stop (ignore "not running" — stop_instance is idempotent), then delete the
+    // OS user via the elevated path. Removal from the registry only happens
+    // after deprovision succeeds, so a failed remove leaves a repairable state.
+    let stop_username = username.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::instance_launch::stop_instance(platform, &stop_username)
+    })
+    .await
+    .map_err(|err| ErrorDto {
+        kind: "operation".into(),
+        message: format!("stop task failed: {err}"),
+    })?
+    .map_err(ErrorDto::from)?;
+    let script = deprovision_script(&username);
+    tauri::async_runtime::spawn_blocking(move || crate::provisioning::run_elevated(&script))
+        .await
+        .map_err(|err| ErrorDto {
+            kind: "operation".into(),
+            message: format!("deprovision task failed: {err}"),
+        })?
+        .map_err(ErrorDto::from)?;
+    let mut persisted = state.persisted.lock().map_err(|_| ErrorDto {
+        kind: "state".into(),
+        message: "launcher state lock is poisoned".into(),
+    })?;
+    persisted
+        .multi_instance
+        .instances
+        .retain(|i| i.os_username != username);
+    crate::storage::save_state(&state.paths, &persisted).map_err(ErrorDto::from)?;
+    let mi = persisted.multi_instance.clone();
+    drop(persisted);
+    sync_multi_instance_status(&state)?;
+    Ok(mi)
 }
 
 #[tauri::command]
@@ -290,6 +776,38 @@ mod tests {
     use std::sync::atomic::{AtomicBool, Ordering};
 
     #[test]
+    fn remove_refused_without_backup_or_force() {
+        // remove_guard returns Err only when no backup and !force
+        assert!(remove_guard(false, false).is_err());
+        assert!(remove_guard(true, false).is_ok());
+        assert!(remove_guard(false, true).is_ok());
+        assert!(remove_guard(true, true).is_ok());
+    }
+
+    #[test]
+    fn update_gate_blocks_while_instances_running() {
+        assert!(update_gate(&[true]).is_err());
+        assert!(update_gate(&[false, false]).is_ok());
+        assert!(update_gate(&[]).is_ok());
+    }
+
+    #[test]
+    fn set_game_path_locked_while_multi_instance_enabled() {
+        let err = game_path_lock_check(true).expect_err("locked under MI mode");
+        assert_eq!(err.kind, "gamePath");
+        assert!(err.message.contains("multi-instance"));
+        assert!(game_path_lock_check(false).is_ok());
+    }
+
+    #[test]
+    fn home_rediscovery_suppressed_while_multi_instance_enabled() {
+        // Split-brain guard: with MI on, a stale game_path must error rather
+        // than re-pin to the original home-dir install (D-2).
+        assert!(!home_rediscovery_allowed(true));
+        assert!(home_rediscovery_allowed(false));
+    }
+
+    #[test]
     fn open_logs_error_uses_command_kind() {
         let error = open_logs_error("directory unavailable");
 
@@ -483,6 +1001,26 @@ pub async fn check_game_update(state: State<'_, AppState>) -> CommandResult<Laun
 
 #[tauri::command]
 pub async fn update_game(app: tauri::AppHandle, state: State<'_, AppState>) -> CommandResult<bool> {
+    // Update gate (spec §6.2): instances share one install; refuse while any run.
+    {
+        let persisted = state.persisted.lock().map_err(|_| ErrorDto {
+            kind: "state".into(),
+            message: "launcher state lock is poisoned".into(),
+        })?;
+        if persisted.multi_instance.enabled {
+            let matcher =
+                crate::instance_launch::process_matcher(crate::models::current_platform());
+            let mut running = Vec::new();
+            for instance in &persisted.multi_instance.instances {
+                running.push(
+                    crate::instance_launch::instance_pid(&instance.os_username, matcher)
+                        .map_err(ErrorDto::from)?
+                        .is_some(),
+                );
+            }
+            update_gate(&running).map_err(ErrorDto::from)?;
+        }
+    }
     let diagnostics = state.diagnostics.clone();
     let staging_dir = state.paths.staging_dir.clone();
     let game_path = resolve_game_path(&state, crate::models::current_platform())
@@ -825,18 +1363,30 @@ async fn resolve_game_path(
     state: &State<'_, AppState>,
     platform: crate::models::Platform,
 ) -> CommandResult<ResolvedGame> {
-    let persisted_path = {
+    let (persisted_path, mi_enabled) = {
         let persisted = state.persisted.lock().map_err(|_| ErrorDto {
             kind: "state".into(),
             message: "launcher state lock is poisoned".into(),
         })?;
-        persisted.game_path.clone()
+        (
+            persisted.game_path.clone(),
+            persisted.multi_instance.enabled,
+        )
     };
     if let Some(path) = persisted_path {
         // Re-validate: the persisted path may now be stale (game moved or
         // uninstalled).
         if crate::game_locator::is_valid_game_root(&path, platform) {
             return Ok(ResolvedGame { root: path });
+        }
+        if !home_rediscovery_allowed(mi_enabled) {
+            return Err(ErrorDto {
+                kind: "gamePath".into(),
+                message: format!(
+                    "shared game install at {} is invalid; re-run the multi-instance wizard to repair",
+                    path.display()
+                ),
+            });
         }
         // Stale persisted path; fall through to re-discovery rather than running
         // an update/launch against a directory that is no longer a valid install.

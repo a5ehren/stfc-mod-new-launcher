@@ -7,6 +7,15 @@ import {
 	getLauncherStatus,
 	getWindowsLegacyCleanupPlan,
 	launchGame,
+	miBackupInstance,
+	miInstanceStatus,
+	miProvision,
+	miRemoveInstance,
+	miRestoreInstance,
+	miSetEnabled,
+	miStartInstance,
+	miStopInstance,
+	miWizardPlan,
 	onProgress,
 	openLogs,
 	openRawConfig,
@@ -134,5 +143,94 @@ describe("command wrappers", () => {
 			expect.any(Function),
 		);
 		expect(unlisten).toBe(mockUnlisten);
+	});
+
+	it("invokes mi wizard plan command", async () => {
+		vi.mocked(invoke).mockResolvedValue({
+			needsRelocation: true,
+			gameSource: "/old/path",
+			sharedRoot: "/Users/Shared/STFC/game",
+		});
+
+		await miWizardPlan();
+
+		expect(invoke).toHaveBeenCalledWith("mi_wizard_plan");
+	});
+
+	it("invokes mi provision with names and returns state", async () => {
+		vi.mocked(invoke).mockResolvedValue({
+			enabled: true,
+			sharedGameRoot: "/Users/Shared/STFC/game",
+			instances: [],
+		});
+
+		await miProvision(["alt2", "alt3"]);
+
+		expect(invoke).toHaveBeenCalledWith("mi_provision", {
+			names: ["alt2", "alt3"],
+		});
+	});
+
+	it("invokes mi start instance with name", async () => {
+		vi.mocked(invoke).mockResolvedValue(4242);
+
+		await miStartInstance("alt2");
+
+		expect(invoke).toHaveBeenCalledWith("mi_start_instance", { name: "alt2" });
+	});
+
+	it("invokes mi stop instance with name", async () => {
+		vi.mocked(invoke).mockResolvedValue(undefined);
+
+		await miStopInstance("alt2");
+
+		expect(invoke).toHaveBeenCalledWith("mi_stop_instance", { name: "alt2" });
+	});
+
+	it("invokes mi instance status command", async () => {
+		vi.mocked(invoke).mockResolvedValue([]);
+
+		await miInstanceStatus();
+
+		expect(invoke).toHaveBeenCalledWith("mi_instance_status");
+	});
+
+	it("invokes mi backup instance with name", async () => {
+		vi.mocked(invoke).mockResolvedValue("/backups/alt2/2026-08-24");
+
+		await miBackupInstance("alt2");
+
+		expect(invoke).toHaveBeenCalledWith("mi_backup_instance", {
+			name: "alt2",
+		});
+	});
+
+	it("invokes mi restore instance with name", async () => {
+		vi.mocked(invoke).mockResolvedValue(undefined);
+
+		await miRestoreInstance("alt2");
+
+		expect(invoke).toHaveBeenCalledWith("mi_restore_instance", {
+			name: "alt2",
+		});
+	});
+
+	it("invokes mi remove instance with force flag", async () => {
+		vi.mocked(invoke).mockResolvedValue(undefined);
+
+		await miRemoveInstance("alt2", true);
+
+		expect(invoke).toHaveBeenCalledWith("mi_remove_instance", {
+			name: "alt2",
+			force: true,
+		});
+	});
+
+	it("invokes mi set enabled with boolean", async () => {
+		vi.mocked(invoke).mockResolvedValue(undefined);
+
+		await miSetEnabled(true);
+
+		expect(invoke).toHaveBeenCalledWith("mi_set_enabled", { enabled: true });
 	});
 });

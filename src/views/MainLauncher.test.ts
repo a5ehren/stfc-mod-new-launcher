@@ -5,6 +5,7 @@ import LcarsButton from "@/components/lcars/LcarsButton.vue";
 import {
 	getLauncherStatus,
 	launchGame,
+	miInstanceStatus,
 	setGamePath,
 	updateGame,
 	validateGamePath,
@@ -29,6 +30,7 @@ vi.mock("@/lib/commands", () => ({
 			launchMode: "managed",
 		},
 		launcherUpdateAvailable: false,
+		multiInstance: { enabled: false, sharedGameRoot: null, instances: [] },
 	})),
 	setModChannel: vi.fn(),
 	openLogs: vi.fn(),
@@ -48,10 +50,17 @@ vi.mock("@/lib/commands", () => ({
 	checkLauncherUpdate: vi.fn(async () => null),
 	installLauncherUpdate: vi.fn(async () => false),
 	onProgress: vi.fn(async () => vi.fn()),
+	miInstanceStatus: vi.fn(async () => []),
+	miStartInstance: vi.fn(),
+	miStopInstance: vi.fn(),
+	miBackupInstance: vi.fn(),
+	miRestoreInstance: vi.fn(),
+	miRemoveInstance: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({
 	open: vi.fn(),
+	confirm: vi.fn(async () => true),
 }));
 
 vi.mock("@tauri-apps/plugin-process", () => ({
@@ -76,12 +85,70 @@ describe("MainLauncher", () => {
 		expect(wrapper.find(".lcars-shell").classes()).toContain("compact-header");
 		expect(wrapper.find(".data-cascade").exists()).toBe(false);
 		expect(wrapper.find(".launch-status").exists()).toBe(true);
-		expect(labels.slice(-4)).toEqual([
+		expect(labels.slice(-5)).toEqual([
 			"Open Logs",
+			"Multi-Instance",
 			"Update Game",
 			"Update Mod",
 			"Launch Game",
 		]);
+	});
+
+	it("renders the instances panel only when multi-instance mode is enabled", async () => {
+		const enabledStatus = {
+			game: {
+				known: true,
+				path: "/game",
+				installedVersion: 168,
+				latestVersion: 169,
+				updateAvailable: false,
+			},
+			modStatus: {
+				installed: true,
+				installedVersion: "v1.0.0",
+				latestVersion: "v1.1.0",
+				channel: "stable",
+				updateAvailable: false,
+				launchMode: "managed",
+			},
+			launcherUpdateAvailable: false,
+			multiInstance: {
+				enabled: true,
+				sharedGameRoot: "/Users/Shared/STFC/game",
+				instances: [
+					{
+						name: "alt2",
+						osUsername: "stfc-alt2",
+						createdAt: "2026-08-24T00:00:00Z",
+						lastBackupAt: null,
+					},
+				],
+			},
+		};
+		vi.mocked(getLauncherStatus).mockResolvedValueOnce(enabledStatus as never);
+		vi.mocked(miInstanceStatus).mockResolvedValueOnce([
+			{
+				name: "alt2",
+				osUsername: "stfc-alt2",
+				running: false,
+				pid: null,
+				lastBackupAt: null,
+			},
+		]);
+
+		const wrapper = mount(MainLauncher);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		expect(wrapper.find(".instance-panel").exists()).toBe(true);
+		expect(wrapper.text()).toContain("alt2");
+
+		vi.mocked(getLauncherStatus).mockResolvedValueOnce({
+			...enabledStatus,
+			multiInstance: { enabled: false, sharedGameRoot: null, instances: [] },
+		} as never);
+		const disabledWrapper = mount(MainLauncher);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(disabledWrapper.find(".instance-panel").exists()).toBe(false);
 	});
 
 	it("hides update actions when no updates are available", async () => {

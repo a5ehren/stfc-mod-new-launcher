@@ -22,7 +22,35 @@ export type LauncherStatus = {
 	game: GameStatus;
 	modStatus: ModStatus;
 	launcherUpdateAvailable: boolean;
+	multiInstance: MultiInstanceState;
 };
+
+export interface MultiInstanceState {
+	enabled: boolean;
+	sharedGameRoot: string | null;
+	instances: Instance[];
+}
+
+export interface Instance {
+	name: string;
+	osUsername: string;
+	createdAt: string;
+	lastBackupAt: string | null;
+}
+
+export interface WizardPlanDto {
+	needsRelocation: boolean;
+	gameSource: string | null;
+	sharedRoot: string;
+}
+
+export interface InstanceStatusDto {
+	name: string;
+	osUsername: string;
+	running: boolean;
+	pid: number | null;
+	lastBackupAt: string | null;
+}
 
 export type ProgressEvent = {
 	operation: string;
