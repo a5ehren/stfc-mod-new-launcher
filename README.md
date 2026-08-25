@@ -1,59 +1,45 @@
-# STFC Mod New Launcher
+# STFC Community Mod Launcher
 
-Cross-platform Tauri 2 launcher for the STFC Community Mod.
+The launcher for the STFC Community Mod, for macOS and Windows. It keeps
+your game and mod up to date, launches Star Trek Fleet Command with the
+mod injected, and lets you edit mod settings without touching files by
+hand.
 
-## Launcher Runtime
+## Installation
 
-This launcher is a Tauri 2 app for macOS and Windows. It downloads the platform mod library from GitHub releases into managed app data, supports a stable/prerelease mod channel toggle, launches STFC with mod injection, and opens a separate config editor window.
+Download the latest installer from the Releases page:
 
-Runtime asset contracts are documented in `docs/runtime-contracts.md`.
+- **macOS** — open the `.dmg` and drag the launcher into Applications.
+- **Windows** — run the `.msi` installer.
 
-## Tech Stack
+The launcher updates itself, so you only need to install it once.
 
-- Tauri 2
-- Rust 2021
-- Vue 3
-- TypeScript
-- Vite
-- Vitest
+## First run
 
-## Development
+1. Start the launcher.
+2. When asked, point it at your Star Trek Fleet Command game folder
+   (**Select STFC game folder**).
+3. Click **Update Mod** to download the latest mod.
 
-```bash
-# Install dependencies
-pnpm install
+That's it — click **Launch** to play.
 
-# Run development server
-pnpm tauri dev
+## Everyday use
 
-# Run tests
-pnpm test
+- **Launch** — starts the game with the mod loaded.
+- **Update Game** — checks for and applies official game updates.
+- **Update Mod** — downloads the newest mod release.
+- **Stable / Prerelease** — pick the mod channel. Prerelease gets new
+  features early but may be rougher.
+- **Config** — opens the settings editor for the mod in a separate window.
 
-# Build the macOS universal app bundle
-pnpm build:macos
+## Multi-instance mode
 
-# Build the Windows MSI installer
-pnpm build:windows
-```
+Run several game accounts at the same time, each in its own isolated
+instance. Open the multi-instance wizard from the instances panel to set
+up additional instances — the launcher handles the OS-level work (you'll
+be asked for your password / a UAC prompt once per instance). Each
+instance can be started, stopped, backed up, and restored independently.
 
-## Project Structure
+## Support
 
-```
-src-tauri/          # Rust backend
-src/                # Vue frontend
-src/lib/config/     # Config TOML model (ported from modconfig)
-src/views/          # MainLauncher, ConfigEditor
-src/components/     # LCARS UI components, config components
-```
-
-## Commands
-
-- `pnpm dev` - Start Vite dev server
-- `pnpm build` - Build frontend
-- `pnpm build:macos` - Build the macOS universal Tauri bundle
-- `pnpm build:windows` - Build the Windows MSI installer
-- `pnpm test` - Run Vitest tests
-- `pnpm tauri dev` - Run Tauri in dev mode
-- `pnpm tauri build` - Build Tauri app
-- `cd src-tauri && cargo test` - Run Rust tests
-```
+Found a bug or have a question? Open an issue on this repository.
