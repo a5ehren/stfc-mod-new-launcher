@@ -34,15 +34,15 @@ thiserror = "2.0.20"
 reqwest = { version = "0.13.4", features = ["json", "rustls"] }
 sha2 = "0.11.0"
 hex = "0.4.3"
-getrandom = "0.3"
+getrandom = "0.4"
 tar = "0.4.46"
 zstd = "0.13.3"
 tempfile = "3.27.0"
-quick-xml = "0.41.0"
+quick-xml = "0.42.0"
 serde_with = "3.22.0"
 chrono = { version = "0.4.45", features = ["serde"] }
 directories = "6.0.0"
-sevenz-rust2 = "0.21.5"
+sevenz-rust2 = "0.22.0"
 librsync = "0.2.5"
 tauri-plugin-fs = "2"
 
