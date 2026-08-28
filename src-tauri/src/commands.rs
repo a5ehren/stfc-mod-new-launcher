@@ -1106,13 +1106,35 @@ pub async fn update_game(app: tauri::AppHandle, state: State<'_, AppState>) -> C
                 crate::instance_launch::process_matcher(crate::models::current_platform());
             let mut running = Vec::new();
             for instance in &persisted.multi_instance.instances {
-                running.push(
-                    crate::instance_launch::instance_pid(&instance.os_username, matcher)
-                        .map_err(ErrorDto::from)?
-                        .is_some(),
+                let pid = crate::instance_launch::instance_pid(&instance.os_username, matcher)
+                    .map_err(ErrorDto::from)?;
+                let _ = state.diagnostics.info(
+                    "game_update",
+                    &format!(
+                        "update gate: instance {} (user {}) matcher {matcher:?} -> pid {pid:?}",
+                        instance.name, instance.os_username
+                    ),
                 );
+                running.push(pid.is_some());
             }
-            update_gate(&running).map_err(ErrorDto::from)?;
+            if let Err(err) = update_gate(&running) {
+                let _ = state
+                    .diagnostics
+                    .warn("game_update", &format!("update gate: blocked, {err}"));
+                return Err(ErrorDto::from(err));
+            }
+            let _ = state.diagnostics.info(
+                "game_update",
+                &format!(
+                    "update gate: clear, {} instance(s) not running",
+                    running.len()
+                ),
+            );
+        } else {
+            let _ = state.diagnostics.info(
+                "game_update",
+                "update gate: multi-instance disabled, skipped",
+            );
         }
     }
     let diagnostics = state.diagnostics.clone();
@@ -1167,11 +1189,20 @@ pub async fn update_game(app: tauri::AppHandle, state: State<'_, AppState>) -> C
         staging_root: staging_dir.join("xsolla-staging"),
     };
     let progress_app = progress_app.clone();
-    crate::game_updater::run_update_plan(&client, &plan, &context, move |event| {
-        emit_progress(&progress_app, event);
-    })
-    .await
-    .map_err(ErrorDto::from)?;
+    let result = crate::game_updater::run_update_plan(
+        &client,
+        &plan,
+        &context,
+        &diagnostics,
+        move |event| {
+            emit_progress(&progress_app, event);
+        },
+    )
+    .await;
+    if let Err(err) = &result {
+        let _ = diagnostics.error("game_update", &format!("update plan failed: {err}"));
+    }
+    result.map_err(ErrorDto::from)?;
 
     diagnostics
         .info(

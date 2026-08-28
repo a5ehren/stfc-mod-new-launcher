@@ -111,7 +111,12 @@ pub fn parse_update_plan(xml: &str) -> LauncherResult<XsollaPlan> {
 pub fn normalize_relative_patch_path(path: &str) -> LauncherResult<String> {
     let mut components = Vec::new();
     for component in path.trim().split(['/', '\\']) {
-        if component.is_empty() || component == "." || component == ".." {
+        // Xsolla roots rule paths at the install dir (leading '/'); empty and
+        // "." components can't escape the game root, so skip them. ".." can.
+        if component.is_empty() || component == "." {
+            continue;
+        }
+        if component == ".." {
             return Err(LauncherError::InvalidData {
                 context: "normalizing patch path".into(),
                 message: format!("invalid patch path {path}"),
@@ -144,6 +149,26 @@ mod tests {
             plan.actions[4],
             XsollaAction::Version { version: 169 }
         ));
+    }
+
+    #[test]
+    fn normalizes_rooted_patch_paths() {
+        // Real 190 rule from a multi-box update log: Xsolla roots macOS rule
+        // paths at the install dir with a leading '/'.
+        assert_eq!(
+            normalize_relative_patch_path(
+                "/Star Trek Fleet Command.app/Contents/Resources/Data/StreamingAssets/Pre-Bundles/stationwarning/materials"
+            )
+            .expect("rooted path"),
+            "Star Trek Fleet Command.app/Contents/Resources/Data/StreamingAssets/Pre-Bundles/stationwarning/materials"
+        );
+        assert_eq!(
+            normalize_relative_patch_path("a//b/").expect("empty components"),
+            "a/b"
+        );
+        // Traversal stays rejected.
+        assert!(normalize_relative_patch_path("a/../b").is_err());
+        assert!(normalize_relative_patch_path("/").is_err());
     }
 
     #[test]

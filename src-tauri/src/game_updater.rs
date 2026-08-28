@@ -1,3 +1,4 @@
+use crate::diagnostics::DiagnosticsService;
 use crate::errors::{io_context, LauncherError, LauncherResult};
 use crate::events::ProgressEvent;
 use crate::models::Platform;
@@ -106,11 +107,21 @@ fn copy_directory_contents(source: &Path, target: &Path) -> LauncherResult<()> {
         if source_path.is_dir() {
             copy_directory_contents(&source_path, &target_path)?;
         } else {
-            if target_path.exists() {
+            // Staged artifacts are created with default 0644 (rsync output file,
+            // 7z extraction) and fs::copy propagates source permissions — capture
+            // and restore the overwritten file's mode or the patched game binary
+            // loses its execute bit (EACCES on next launch).
+            let existing_permissions = if target_path.exists() {
+                let permissions = fs::metadata(&target_path)
+                    .map_err(|err| io_context(format!("reading {}", target_path.display()), err))?
+                    .permissions();
                 fs::remove_file(&target_path).map_err(|err| {
                     io_context(format!("removing {}", target_path.display()), err)
                 })?;
-            }
+                Some(permissions)
+            } else {
+                None
+            };
             fs::copy(&source_path, &target_path).map_err(|err| {
                 io_context(
                     format!(
@@ -121,6 +132,14 @@ fn copy_directory_contents(source: &Path, target: &Path) -> LauncherResult<()> {
                     err,
                 )
             })?;
+            if let Some(permissions) = existing_permissions {
+                fs::set_permissions(&target_path, permissions).map_err(|err| {
+                    io_context(
+                        format!("restoring permissions on {}", target_path.display()),
+                        err,
+                    )
+                })?;
+            }
         }
     }
     Ok(())
@@ -157,6 +176,7 @@ pub async fn run_update_plan(
     client: &reqwest::Client,
     plan: &XsollaPlan,
     context: &GameUpdateContext,
+    diagnostics: &DiagnosticsService,
     mut progress: impl FnMut(ProgressEvent) + Send,
 ) -> LauncherResult<()> {
     progress(ProgressEvent::message(
@@ -190,6 +210,17 @@ pub async fn run_update_plan(
     let mut pending_deletes = Vec::new();
     let mut pending_version = None;
     let total_actions = plan.actions.len() as u64;
+    let _ = diagnostics.info(
+        "game_update",
+        &format!(
+            "running update plan to version {:?}: {} action(s); game_root={} temp={} staging={}",
+            plan.target_version,
+            total_actions,
+            context.game_root.display(),
+            context.xsolla_temp_root.display(),
+            context.staging_root.display()
+        ),
+    );
 
     for (index, action) in plan.actions.iter().enumerate() {
         progress(ProgressEvent::counted(
@@ -204,14 +235,14 @@ pub async fn run_update_plan(
                 progress(ProgressEvent::message(
                     "gameUpdate",
                     "download",
-                    format!("downloading update payload from {url}"),
+                    "downloading game update files".to_string(),
                 ));
                 let target = PathBuf::from(substitute_paths(to, context));
                 if let Some(parent) = target.parent() {
                     fs::create_dir_all(parent)
                         .map_err(|err| io_context(format!("creating {}", parent.display()), err))?;
                 }
-                let bytes = client
+                let mut response = client
                     .get(url)
                     .send()
                     .await
@@ -223,31 +254,68 @@ pub async fn run_update_plan(
                     .map_err(|source| LauncherError::Network {
                         context: format!("checking Xsolla payload response {url}"),
                         source,
-                    })?
-                    .bytes()
-                    .await
-                    .map_err(|source| LauncherError::Network {
-                        context: format!("reading Xsolla payload {url}"),
-                        source,
                     })?;
+                let total = response.content_length();
+                let mut bytes = Vec::new();
+                let mut downloaded: u64 = 0;
+                let mut last_pct = 0u64;
+                while let Some(chunk) =
+                    response
+                        .chunk()
+                        .await
+                        .map_err(|source| LauncherError::Network {
+                            context: format!("reading Xsolla payload {url}"),
+                            source,
+                        })?
+                {
+                    downloaded += chunk.len() as u64;
+                    bytes.extend_from_slice(&chunk);
+                    if let Some(total) = total.filter(|&t| t > 0) {
+                        let pct = (downloaded * 100 / total).min(100);
+                        if pct != last_pct {
+                            last_pct = pct;
+                            progress(ProgressEvent::message(
+                                "gameUpdate",
+                                "download",
+                                format!("downloading game update files ({pct}%)"),
+                            ));
+                        }
+                    }
+                }
+                let byte_len = bytes.len();
                 fs::write(&target, bytes)
                     .map_err(|err| io_context(format!("writing {}", target.display()), err))?;
+                let _ = diagnostics.info(
+                    "game_update",
+                    &format!(
+                        "downloaded {url} -> {} ({byte_len} bytes)",
+                        target.display()
+                    ),
+                );
             }
             XsollaAction::Extract { file, to } => {
                 progress(ProgressEvent::message(
                     "gameUpdate",
                     "extract",
-                    format!("extracting {file}"),
+                    "extracting game update files".to_string(),
                 ));
                 let archive = PathBuf::from(substitute_paths(file, context));
                 let destination = PathBuf::from(substitute_paths(to, context));
+                let _ = diagnostics.info(
+                    "game_update",
+                    &format!(
+                        "extracting {} -> {}",
+                        archive.display(),
+                        destination.display()
+                    ),
+                );
                 extract_7z_archive(&archive, &destination)?;
             }
             XsollaAction::Patch { patch, .. } => {
                 progress(ProgressEvent::message(
                     "gameUpdate",
                     "patch",
-                    format!("applying patches from {patch}"),
+                    "applying game update patches".to_string(),
                 ));
                 let patch_root = PathBuf::from(substitute_paths(patch, context));
                 let rules_path = patch_root.join("patchRules.json");
@@ -259,6 +327,14 @@ pub async fn run_update_plan(
                         message: err.to_string(),
                     }
                 })?;
+                let _ = diagnostics.info(
+                    "game_update",
+                    &format!(
+                        "applying {} patch rule(s) from {}",
+                        rules.len(),
+                        patch_root.display()
+                    ),
+                );
                 for rule in rules {
                     let relative = normalize_relative_patch_path(&rule.relative_path)?;
                     if relative.contains("_CodeSignature") {
@@ -274,13 +350,29 @@ pub async fn run_update_plan(
                             } else {
                                 source_path
                             };
+                            let _ = diagnostics.info(
+                                "game_update",
+                                &format!(
+                                    "rule patch {relative}: basis={} patch_bytes={}",
+                                    basis.display(),
+                                    fs::metadata(&patch_path).map(|m| m.len()).unwrap_or(0)
+                                ),
+                            );
                             let output = staged_target.with_extension("patching");
                             if let Some(parent) = staged_target.parent() {
                                 fs::create_dir_all(parent).map_err(|err| {
                                     io_context(format!("creating {}", parent.display()), err)
                                 })?;
                             }
-                            crate::rsync_patch::apply_rsync_patch(&basis, &patch_path, &output)?;
+                            if let Err(err) =
+                                crate::rsync_patch::apply_rsync_patch(&basis, &patch_path, &output)
+                            {
+                                let _ = diagnostics.error(
+                                    "game_update",
+                                    &format!("rsync patch failed for {relative}: {err}"),
+                                );
+                                return Err(err);
+                            }
                             fs::rename(&output, &staged_target).map_err(|err| {
                                 io_context(
                                     format!(
@@ -354,6 +446,15 @@ pub async fn run_update_plan(
         "finalizing",
         "copying staged files into the game directory",
     ));
+    let _ = diagnostics.info(
+        "game_update",
+        &format!(
+            "finalizing into {}: {} deferred delete(s), pending_version={:?}",
+            context.game_root.display(),
+            pending_deletes.len(),
+            pending_version
+        ),
+    );
     finalize_update(
         &context.staging_root,
         &context.game_root,
@@ -441,6 +542,34 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn finalize_preserves_overwritten_file_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = tempfile::tempdir().expect("tempdir");
+        let game = root.path().join("game");
+        let staging = root.path().join("staging");
+        std::fs::create_dir_all(&game).expect("game");
+        std::fs::create_dir_all(&staging).expect("staging");
+        let binary = game.join("Star Trek Fleet Command");
+        std::fs::write(&binary, b"old").expect("binary");
+        std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+        // Staged artifacts land 0644 (rsync File::create / 7z extraction).
+        std::fs::write(staging.join("Star Trek Fleet Command"), b"new").expect("staged");
+
+        finalize_update(&staging, &game, &[], None).expect("finalize");
+
+        assert_eq!(std::fs::read(&binary).expect("content"), b"new");
+        assert_eq!(
+            std::fs::metadata(&binary)
+                .expect("meta")
+                .permissions()
+                .mode()
+                & 0o777,
+            0o755
+        );
+    }
+
     #[test]
     fn xsolla_update_url_uses_platform_and_version() {
         assert_eq!(
@@ -509,11 +638,47 @@ mod tests {
         };
         let client = reqwest::Client::new();
 
-        let result =
-            tauri::async_runtime::block_on(run_update_plan(&client, &plan, &context, |_| {}));
+        let diagnostics = crate::diagnostics::DiagnosticsService::new(root.path().join("logs"));
+        let result = tauri::async_runtime::block_on(run_update_plan(
+            &client,
+            &plan,
+            &context,
+            &diagnostics,
+            |_| {},
+        ));
 
         assert!(result.is_err());
         assert!(!xsolla_temp.exists(), "xsolla temp root should be removed");
         assert!(!staging.exists(), "staging root should be removed");
+    }
+
+    #[test]
+    fn run_update_plan_logs_plan_boundaries() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let game = root.path().join("game");
+        std::fs::create_dir_all(&game).expect("game dir");
+        let diagnostics = crate::diagnostics::DiagnosticsService::new(root.path().join("logs"));
+        let plan = XsollaPlan {
+            target_version: Some(170),
+            actions: vec![XsollaAction::Version { version: 170 }],
+        };
+        let context = GameUpdateContext {
+            game_root: game,
+            xsolla_temp_root: root.path().join("xsolla-temp"),
+            staging_root: root.path().join("staging"),
+        };
+        let client = reqwest::Client::new();
+        tauri::async_runtime::block_on(run_update_plan(
+            &client,
+            &plan,
+            &context,
+            &diagnostics,
+            |_| {},
+        ))
+        .expect("plan");
+
+        let log = std::fs::read_to_string(diagnostics.log_file()).expect("log");
+        assert!(log.contains("running update plan to version Some(170)"));
+        assert!(log.contains("finalizing into"));
     }
 }
