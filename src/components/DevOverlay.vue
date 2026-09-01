@@ -1,11 +1,28 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onMounted, onUnmounted } from "vue";
 import { useBootstrapStatus } from "@/lib/bootstrap-status";
+import { openDevtools } from "@/lib/commands";
 
 const isDev = import.meta.env.DEV;
 const { bootstrapStatus, bootstrapError } = useBootstrapStatus();
 
 const hasError = computed(() => bootstrapError.value !== null);
+
+const isMac = navigator.userAgent.includes("Mac");
+const hintKeys = isMac ? ["Cmd", "Opt", "I"] : ["Ctrl", "Shift", "I"];
+
+function onKeydown(event: KeyboardEvent) {
+	const modifierMatch = isMac
+		? event.metaKey && event.altKey
+		: event.ctrlKey && event.shiftKey;
+	if (modifierMatch && event.code === "KeyI") {
+		event.preventDefault();
+		openDevtools();
+	}
+}
+
+onMounted(() => window.addEventListener("keydown", onKeydown));
+onUnmounted(() => window.removeEventListener("keydown", onKeydown));
 </script>
 
 <template>
@@ -14,7 +31,7 @@ const hasError = computed(() => bootstrapError.value !== null);
       <div class="dev-overlay__label">Dev Status</div>
       <div class="dev-overlay__status">{{ bootstrapStatus }}</div>
       <pre v-if="bootstrapError" class="dev-overlay__error">{{ bootstrapError }}</pre>
-      <div v-else class="dev-overlay__hint">Open DevTools with <kbd>Cmd</kbd> + <kbd>Opt</kbd> + <kbd>I</kbd></div>
+      <div v-else class="dev-overlay__hint">Open DevTools with <template v-for="(key, index) in hintKeys" :key="key"><span v-if="index > 0"> + </span><kbd>{{ key }}</kbd></template></div>
     </div>
   </div>
 </template>
@@ -67,7 +84,7 @@ const hasError = computed(() => bootstrapError.value !== null);
   font-size: 12px;
 }
 kbd {
-  border: 1px solid rgba(255, 255, 255, 0.18);
+	border: 1px solid rgba(255, 255, 255, 0.18);
   border-bottom-width: 2px;
   border-radius: 6px;
   padding: 0 6px;

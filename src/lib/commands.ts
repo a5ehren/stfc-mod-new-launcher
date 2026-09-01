@@ -31,6 +31,11 @@ export function openRawConfig(): Promise<void> {
 	return invoke("open_raw_config");
 }
 
+// Dev-only: the command is only registered in debug builds.
+export function openDevtools(): Promise<void> {
+	return invoke("open_devtools");
+}
+
 export function openConfigEditor(): Promise<void> {
 	return invoke("open_config_editor");
 }

@@ -685,6 +685,12 @@ pub async fn open_logs(app: tauri::AppHandle, state: State<'_, AppState>) -> Com
     Ok(())
 }
 
+#[cfg(debug_assertions)]
+#[tauri::command]
+pub fn open_devtools(window: tauri::WebviewWindow) {
+    window.open_devtools();
+}
+
 #[tauri::command]
 pub fn get_windows_legacy_cleanup_plan(
     game_root: String,

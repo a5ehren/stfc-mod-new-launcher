@@ -67,6 +67,8 @@ pub fn run() {
             commands::mi_restore_instance,
             commands::mi_remove_instance,
             commands::mi_set_instance_label,
+            #[cfg(debug_assertions)]
+            commands::open_devtools,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
