@@ -3,8 +3,9 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import InstancePanel from "@/components/InstancePanel.vue";
-import LcarsButton from "@/components/lcars/LcarsButton.vue";
-import LcarsShell from "@/components/lcars/LcarsShell.vue";
+import ViewscreenFrame from "@/components/briefing/ViewscreenFrame.vue";
+import WarpField from "@/components/briefing/WarpField.vue";
+import ViewscreenButton from '@/components/briefing/ViewscreenButton.vue';
 import StatusStrip from "@/components/StatusStrip.vue";
 import {
 	checkGameUpdate,
@@ -238,134 +239,215 @@ onBeforeUnmount(() => {
 
 <template>
   <MultiInstanceWizard v-if="showWizard" @done="onWizardDone" />
-  <LcarsShell v-else banner-text="STFC Community Mod Launcher" compact-header>
-    <div class="main-grid">
-      <div class="footer-actions">
-        <InstancePanel v-if="status?.multiInstance?.enabled" />
-        <div class="primary-row">
-          <div class="button-cell">
-            <LcarsButton tone="violet" edge="left" @click="openRawConfig">Open Raw Config</LcarsButton>
-          </div>
-          <div class="separator" aria-hidden="true"></div>
-          <div class="button-cell">
-            <LcarsButton tone="tan" edge="middle" @click="openConfigEditor">Open Config Editor</LcarsButton>
-          </div>
-          <div class="separator" aria-hidden="true"></div>
-          <div class="button-cell">
-            <LcarsButton tone="red" edge="middle" @click="openLogs">Open Logs</LcarsButton>
-          </div>
-          <div class="separator" aria-hidden="true"></div>
-          <div class="button-cell">
-            <LcarsButton tone="blue" edge="middle" @click="showWizard = true">Multi-Instance</LcarsButton>
-          </div>
-          <div class="separator" aria-hidden="true"></div>
-          <div class="launch-cell">
-            <div v-if="updateActions.length > 0" class="update-stack">
-              <LcarsButton
-                v-for="(action, index) in updateActions"
-                :key="action.key"
-                :tone="action.tone"
-                :edge="updateEdge(index, updateActions.length)"
-                @click="action.run"
-              >
-                {{ action.label }}
-              </LcarsButton>
-            </div>
-            <StatusStrip class="launch-status" :message="message" :warning="warning" />
-            <LcarsButton tone="orange" edge="right" @click="launchGame">Launch Game</LcarsButton>
-          </div>
+  <section v-else class="lcars-shell compact-header briefing-room">
+    <div class="viewscreen">
+      <WarpField />
+      <div class="screen-interface">
+        <div class="title-block">
+          <span class="kicker">Starfleet terminal // 1701</span>
+          <h1>STFC Community<br />Mod Launcher</h1>
         </div>
+        <div class="screen-status">
+          <span class="status-light" :class="{ warning: warning }"></span>
+          <StatusStrip class="launch-status" :message="message" :warning="warning" />
+        </div>
+        <div v-if="updateActions.length > 0" class="update-stack">
+          <ViewscreenButton
+            v-for="(action, index) in updateActions"
+            :key="action.key"
+            :tone="action.tone"
+            :edge="updateEdge(index, updateActions.length)"
+            @click="action.run"
+          >{{ action.label }}</ViewscreenButton>
+        </div>
+        <InstancePanel v-if="status?.multiInstance?.enabled" />
       </div>
-
-      <button
-        class="channel-toggle"
-        :aria-pressed="status?.modStatus.channel === 'prerelease'"
-        title="Switch mod channel"
-        @click="toggleChannel"
-      >
-        <span :class="{ active: status?.modStatus.channel !== 'prerelease' }">Stable</span>
-        <span :class="{ active: status?.modStatus.channel === 'prerelease' }">Prerelease</span>
-      </button>
+      <ViewscreenFrame class="viewscreen-effects" />
     </div>
-  </LcarsShell>
+
+    <div class="room-actions" aria-label="Launcher controls">
+		<ViewscreenButton variant="console" tone="tan" edge="single" @click="openConfigEditor">Open Config Editor</ViewscreenButton>
+		<ViewscreenButton variant="console" tone="violet" edge="single" @click="openRawConfig">Open Raw Config</ViewscreenButton>
+      <ViewscreenButton variant="console" tone="red" edge="single" @click="openLogs">Open Logs</ViewscreenButton>
+      <ViewscreenButton variant="console" tone="blue" edge="single" @click="showWizard = true">Multi-Instance</ViewscreenButton>
+      <ViewscreenButton variant="console" tone="orange" edge="single" @click="launchGame">Launch Game</ViewscreenButton>
+    </div>
+
+    <button
+      class="channel-toggle"
+      :aria-pressed="status?.modStatus.channel === 'prerelease'"
+      title="Switch mod channel"
+      @click="toggleChannel"
+    >
+      <span :class="{ active: status?.modStatus.channel !== 'prerelease' }">Stable</span>
+      <span :class="{ active: status?.modStatus.channel === 'prerelease' }">Prerelease</span>
+    </button>
+  </section>
 </template>
 
 <style scoped>
-.main-grid {
-  position: relative;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
+.briefing-room {
+	position: relative;
+	width: 100vw;
+	height: 100vh;
+	box-sizing: border-box;
+	overflow: hidden;
+	background: #020914 url("@/assets/briefing-room/backplate-chairless.png") center / 100% 100% no-repeat;
 }
-.footer-actions {
-  display: grid;
-  gap: 12px;
-  padding: 0 18px 0 0;
+.viewscreen {
+	position: absolute;
+	left: 10.3%;
+	top: 7.2%;
+	width: 79.2%;
+	height: 64.7%;
+	overflow: hidden;
+	clip-path: polygon(3.6% 0, 96.4% 0, 100% 7.5%, 100% 92.5%, 96.4% 100%, 3.6% 100%, 0 92.5%, 0 7.5%);
 }
-.primary-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 4px minmax(0, 1fr) 4px minmax(0, 1fr) 4px minmax(0, 1fr) 4px minmax(0, 1fr);
-  align-items: end;
+.screen-interface {
+	position: absolute;
+	inset: 0;
+	display: grid;
+	grid-template-columns: 1fr auto;
+	grid-template-rows: auto 1fr auto;
+	padding: clamp(18px, 3vw, 48px);
+	box-sizing: border-box;
+	background: linear-gradient(90deg, rgba(0, 6, 18, 0.78), transparent 58%);
 }
-.button-cell {
-  min-width: 0;
+.title-block { align-self: start; }
+.kicker {
+	color: #79d9ff;
+	font-size: clamp(10px, 1vw, 15px);
+	letter-spacing: 0.24em;
+	text-transform: uppercase;
 }
-.button-cell :deep(.lcars-button),
-.launch-cell :deep(.lcars-button) {
-  width: 100%;
-  min-width: 0;
+h1 {
+	margin: 8px 0 0;
+	color: #eefbff;
+	font-size: clamp(26px, 4vw, 66px);
+	line-height: 0.9;
+	text-transform: uppercase;
+	text-shadow: 0 0 22px rgba(75, 202, 255, 0.65);
 }
-.separator {
-  width: 4px;
-  align-self: stretch;
-  background: #000;
+.screen-status {
+	grid-column: 1 / -1;
+	align-self: end;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding-bottom: 12px;
 }
-.launch-cell {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  align-items: flex-end;
-  gap: 8px;
+.status-light {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: #62e6b2;
+	box-shadow: 0 0 12px #62e6b2;
 }
+.status-light.warning { background: var(--lcars-gold); box-shadow: 0 0 12px var(--lcars-gold); }
+.launch-status { color: #d9f5ff; font-size: clamp(13px, 1.3vw, 18px); }
 .update-stack {
-  display: flex;
-  justify-content: flex-end;
-  width: fit-content;
+	grid-column: 2;
+	grid-row: 1;
+	display: flex;
+	align-self: start;
 }
-.launch-status {
-  width: max-content;
-  justify-content: flex-end;
+.update-stack :deep(.viewscreen-button) {
+	height: 38px;
+	min-width: 110px;
+	font-size: 12px;
+}
+.viewscreen-effects {
+	position: absolute;
+	inset: 0;
+	z-index: 3;
+	pointer-events: none;
+}
+.room-actions {
+	position: absolute;
+	left: 5.5%;
+	right: 25%;
+	bottom: 4%;
+	display: grid;
+	grid-template-columns: repeat(5, 1fr);
+	gap: clamp(10px, 2vw, 32px);
+}
+.room-actions :deep(.viewscreen-button) {
+	width: 100%;
+	max-height: 80%;
+	min-width: 0;
+}
+.screen-interface :deep(.instance-panel) {
+	grid-column: 1 / -1;
+	grid-row: 2;
+	align-self: center;
+	max-height: 44%;
+	overflow: auto;
+	background: rgba(1, 10, 24, 0.78);
+	border: 1px solid rgba(101, 211, 255, 0.35);
+	border-radius: 10px;
+	padding: 12px;
 }
 .channel-toggle {
-  position: absolute;
-  right: 18px;
-  top: 4px;
-  border: 2px solid var(--lcars-blue);
-  border-radius: 9999px;
-  background: #000;
-  height: 38px;
-  padding: 3px;
-  display: flex;
-  align-items: stretch;
-  gap: 3px;
-  cursor: pointer;
-  text-transform: uppercase;
-  font-size: 13px;
-  font-weight: 700;
+	position: absolute;
+	right: 4.5%;
+	top: 2.8%;
+	z-index: 2;
+	border: 1px solid #63cfff;
+	border-radius: 999px;
+	background: rgba(1, 10, 24, 0.86);
+	padding: 3px;
+	display: flex;
+	gap: 3px;
+	cursor: pointer;
+	text-transform: uppercase;
+	font-size: 11px;
+	font-weight: 700;
+	overflow: hidden;
+	box-shadow: 0 0 12px rgba(87, 201, 255, 0.2);
+	transition: transform 120ms ease, box-shadow 160ms ease, filter 120ms ease;
+}
+.channel-toggle::before {
+	content: "";
+	position: absolute;
+	inset: -1px;
+	border-radius: inherit;
+	background: linear-gradient(90deg, transparent, #d8f5ff, #188dff, transparent) 0 0 / 45% 2px no-repeat;
+	opacity: 0;
+	pointer-events: none;
+}
+.channel-toggle:hover::before,
+.channel-toggle:focus-visible::before {
+	opacity: 1;
+	animation: channel-tracer 1.8s linear infinite;
+}
+.channel-toggle:hover,
+.channel-toggle:focus-visible {
+	box-shadow: 0 0 18px rgba(87, 201, 255, 0.55);
+	outline: none;
+}
+.channel-toggle:active {
+	transform: translateY(2px) scale(0.97);
+	filter: brightness(1.4);
 }
 .channel-toggle span {
-  display: flex;
-  align-items: center;
-  padding: 0 12px;
-  border-radius: 9999px;
-  color: var(--lcars-blue);
-  opacity: 0.55;
+	padding: 5px 9px;
+	border-radius: 999px;
+	color: #78d8ff;
+	opacity: 0.5;
 }
 .channel-toggle span.active {
-  background: var(--lcars-blue);
-  color: #000;
-  opacity: 1;
+	background: #78d8ff;
+	color: #03101a;
+	opacity: 1;
+}
+@keyframes channel-tracer {
+	to { background-position: 220% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+	.channel-toggle::before { animation: none !important; }
+}
+@media (max-aspect-ratio: 4 / 3) {
+	.briefing-room { background-size: cover; }
+	.room-actions { left: 4%; right: 4%; gap: 8px; }
 }
 </style>

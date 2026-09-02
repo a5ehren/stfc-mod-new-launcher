@@ -1,7 +1,7 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import { mount } from "@vue/test-utils";
 import { describe, expect, it, vi } from "vitest";
-import LcarsButton from "@/components/lcars/LcarsButton.vue";
+import ViewscreenButton from "@/components/briefing/ViewscreenButton.vue";
 import {
 	getLauncherStatus,
 	launchGame,
@@ -72,7 +72,7 @@ describe("MainLauncher", () => {
 		const wrapper = mount(MainLauncher);
 		await new Promise((resolve) => setTimeout(resolve, 0));
 		const labels = wrapper
-			.findAllComponents(LcarsButton)
+			.findAllComponents(ViewscreenButton)
 			.map((button) => button.text());
 
 		expect(wrapper.text()).toContain("Launch Game");
@@ -86,10 +86,10 @@ describe("MainLauncher", () => {
 		expect(wrapper.find(".data-cascade").exists()).toBe(false);
 		expect(wrapper.find(".launch-status").exists()).toBe(true);
 		expect(labels.slice(-5)).toEqual([
+			"Open Raw Config",
+			"Open Config Editor",
 			"Open Logs",
 			"Multi-Instance",
-			"Update Game",
-			"Update Mod",
 			"Launch Game",
 		]);
 	});
@@ -205,7 +205,7 @@ describe("MainLauncher", () => {
 
 		const wrapper = mount(MainLauncher);
 		await new Promise((resolve) => setTimeout(resolve, 0));
-		const buttons = wrapper.findAllComponents(LcarsButton);
+		const buttons = wrapper.findAllComponents(ViewscreenButton);
 		await buttons[buttons.length - 1]?.trigger("click");
 		await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -239,7 +239,7 @@ describe("MainLauncher", () => {
 
 		const wrapper = mount(MainLauncher);
 		await new Promise((resolve) => setTimeout(resolve, 0));
-		const buttons = wrapper.findAllComponents(LcarsButton);
+		const buttons = wrapper.findAllComponents(ViewscreenButton);
 		await buttons[buttons.length - 1]?.trigger("click");
 		await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -254,7 +254,7 @@ describe("MainLauncher", () => {
 		const wrapper = mount(MainLauncher);
 		await new Promise((resolve) => setTimeout(resolve, 0));
 		await wrapper
-			.findAllComponents(LcarsButton)
+			.findAllComponents(ViewscreenButton)
 			.find((button) => button.text() === "Update Game")
 			?.trigger("click");
 		await new Promise((resolve) => setTimeout(resolve, 0));
@@ -319,7 +319,7 @@ describe("MainLauncher", () => {
 
 		const wrapper = mount(MainLauncher);
 		await new Promise((resolve) => setTimeout(resolve, 0));
-		const buttons = wrapper.findAllComponents(LcarsButton);
+		const buttons = wrapper.findAllComponents(ViewscreenButton);
 		await buttons[buttons.length - 1]?.trigger("click");
 		await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -384,7 +384,7 @@ describe("MainLauncher", () => {
 
 		const wrapper = mount(MainLauncher);
 		await new Promise((resolve) => setTimeout(resolve, 0));
-		const buttons = wrapper.findAllComponents(LcarsButton);
+		const buttons = wrapper.findAllComponents(ViewscreenButton);
 		await buttons
 			.find((button) => button.text() === "Update Game")
 			?.trigger("click");
