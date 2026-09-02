@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useBootstrapStatus } from "@/lib/bootstrap-status";
 import { openDevtools } from "@/lib/commands";
 
@@ -7,6 +7,8 @@ const isDev = import.meta.env.DEV;
 const { bootstrapStatus, bootstrapError } = useBootstrapStatus();
 
 const hasError = computed(() => bootstrapError.value !== null);
+const animationActive = ref(true);
+let windowFocused = true;
 
 const isMac = navigator.userAgent.includes("Mac");
 const hintKeys = isMac ? ["Cmd", "Opt", "I"] : ["Ctrl", "Shift", "I"];
@@ -21,12 +23,38 @@ function onKeydown(event: KeyboardEvent) {
 	}
 }
 
-onMounted(() => window.addEventListener("keydown", onKeydown));
-onUnmounted(() => window.removeEventListener("keydown", onKeydown));
+function syncAnimation() {
+	animationActive.value = windowFocused && !document.hidden;
+}
+
+function onFocus() {
+	windowFocused = true;
+	syncAnimation();
+}
+
+function onBlur() {
+	windowFocused = false;
+	syncAnimation();
+}
+
+onMounted(() => {
+	windowFocused = document.hasFocus();
+	window.addEventListener("keydown", onKeydown);
+	window.addEventListener("focus", onFocus);
+	window.addEventListener("blur", onBlur);
+	document.addEventListener("visibilitychange", syncAnimation);
+	syncAnimation();
+});
+onUnmounted(() => {
+	window.removeEventListener("keydown", onKeydown);
+	window.removeEventListener("focus", onFocus);
+	window.removeEventListener("blur", onBlur);
+	document.removeEventListener("visibilitychange", syncAnimation);
+});
 </script>
 
 <template>
-  <div v-if="isDev" class="dev-overlay" :class="{ 'has-error': hasError }">
+  <div v-if="isDev" class="dev-overlay" :class="{ 'has-error': hasError, 'is-paused': !animationActive }">
     <div class="dev-overlay__panel">
       <div class="dev-overlay__label">Dev Status</div>
       <div class="dev-overlay__status">{{ bootstrapStatus }}</div>
@@ -58,7 +86,6 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
 	padding: 16px 20px 14px;
 	clip-path: polygon(14px 0, calc(100% - 14px) 0, 100% 14px, 100% calc(100% - 14px), calc(100% - 14px) 100%, 14px 100%, 0 calc(100% - 14px), 0 14px);
 	box-shadow: 0 0 18px rgba(87, 201, 255, 0.22), 0 16px 42px rgba(0, 0, 0, 0.65);
-	backdrop-filter: blur(14px);
 }
 .dev-overlay__panel::before {
 	content: "";
@@ -68,9 +95,10 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
 	background:
 		linear-gradient(90deg, transparent 0 15%, #d8f5ff 24%, #188dff 30%, transparent 39%) 0 0 / 240% 2px no-repeat,
 		linear-gradient(270deg, transparent 0 15%, #d8f5ff 24%, #188dff 30%, transparent 39%) 100% 100% / 240% 2px no-repeat;
-	animation: dev-frame-travel 5.2s linear infinite;
+	animation: dev-frame-travel 7s linear infinite;
 	pointer-events: none;
 }
+.is-paused .dev-overlay__panel::before { animation-play-state: paused; }
 .dev-overlay__panel::after {
 	content: "";
 	position: absolute;
