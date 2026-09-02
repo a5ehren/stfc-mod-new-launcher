@@ -3,6 +3,7 @@ import { onBeforeUnmount, onMounted, ref } from "vue";
 
 const canvas = ref<HTMLCanvasElement | null>(null);
 let frame = 0;
+let animate = true;
 let stars: Star[] = [];
 
 type Star = {
@@ -77,13 +78,14 @@ function draw() {
 		context.stroke();
 	}
 	context.globalCompositeOperation = "source-over";
-	frame = requestAnimationFrame(draw);
+	if (animate) frame = requestAnimationFrame(draw);
 }
 
 onMounted(() => {
 	if (navigator.userAgent.includes("jsdom")) return;
 	resize();
 	window.addEventListener("resize", resize);
+	animate = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 	frame = requestAnimationFrame(draw);
 });
 

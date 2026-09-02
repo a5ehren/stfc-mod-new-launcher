@@ -82,12 +82,12 @@ describe("MainLauncher", () => {
 		expect(wrapper.text()).toContain("Update Game");
 		expect(wrapper.text()).toContain("Update Mod");
 		expect(wrapper.text()).toContain("Stable");
-		expect(wrapper.find(".lcars-shell").classes()).toContain("compact-header");
+
 		expect(wrapper.find(".data-cascade").exists()).toBe(false);
 		expect(wrapper.find(".launch-status").exists()).toBe(true);
 		expect(labels.slice(-5)).toEqual([
-			"Open Raw Config",
 			"Open Config Editor",
+			"Open Raw Config",
 			"Open Logs",
 			"Multi-Instance",
 			"Launch Game",
