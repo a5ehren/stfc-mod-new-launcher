@@ -6,6 +6,7 @@
 	"scripts": {
 		"dev": "vite",
 		"build": "vue-tsc --noEmit && vite build",
+		"sync:modconfig": "node scripts/sync-modconfig.mjs",
 		"build:macos": "pnpm tauri build --bundles dmg --target universal-apple-darwin",
 		"build:windows": "pnpm exec tauri build --bundles msi --ci",
 		"build:windows:arm64": "pnpm exec tauri build --bundles msi --target aarch64-pc-windows-msvc --ci",

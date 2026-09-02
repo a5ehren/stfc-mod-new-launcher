@@ -15,9 +15,10 @@ import {
 	installLauncherUpdate,
 	launchGame as launchGameCommand,
 	onProgress,
-	openConfigEditor,
 	openLogs,
 	openRawConfig,
+	readRawConfig,
+	saveRawConfig,
 	setGamePath,
 	setModChannel,
 	updateGame as updateGameCommand,
@@ -30,6 +31,8 @@ import MultiInstanceWizard from "@/views/MultiInstanceWizard.vue";
 const status = ref<LauncherStatus | null>(null);
 const message = ref("Initializing launcher");
 const showWizard = ref(false);
+const showConfig = ref(false);
+const configFrame = ref<HTMLIFrameElement | null>(null);
 let unlistenProgress: (() => void) | null = null;
 
 const warning = computed(() => {
@@ -224,7 +227,28 @@ async function onWizardDone() {
 	await refresh();
 }
 
+async function handleConfigMessage(event: MessageEvent) {
+	if (event.source !== configFrame.value?.contentWindow) return;
+
+	if (event.data?.type === "modconfig-ready") {
+		const toml = await readRawConfig();
+		configFrame.value?.contentWindow?.postMessage(
+			{ type: "stfc-launcher-config", toml },
+			window.location.origin,
+		);
+	}
+
+	if (
+		event.data?.type === "modconfig-save" &&
+		typeof event.data.toml === "string"
+	) {
+		await saveRawConfig(event.data.toml);
+		message.value = "Mod configuration saved";
+	}
+}
+
 onMounted(async () => {
+	window.addEventListener("message", handleConfigMessage);
 	unlistenProgress = await onProgress((event) => {
 		message.value = event.message;
 	});
@@ -232,6 +256,7 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+	window.removeEventListener("message", handleConfigMessage);
 	unlistenProgress?.();
 	unlistenProgress = null;
 });
@@ -239,7 +264,24 @@ onBeforeUnmount(() => {
 
 <template>
   <MultiInstanceWizard v-if="showWizard" @done="onWizardDone" />
-  <section v-else class="briefing-room">
+  <section v-else class="lcars-shell compact-header briefing-room">
+	<Transition name="config-lower">
+	  <aside v-if="showConfig" class="config-drawer" aria-label="Mod configuration editor">
+		<header class="config-drawer__bar">
+		  <div>
+			<strong>MODCONFIG</strong>
+			<span>Launcher edition</span>
+		  </div>
+		  <button type="button" aria-label="Close config editor" @click="showConfig = false">Close</button>
+		</header>
+		<iframe
+		  ref="configFrame"
+		  title="STFC Mod Config"
+		  src="/modconfig/index.html?launcher=1"
+		/>
+		<div class="config-drawer__rail" aria-hidden="true"><span></span></div>
+	  </aside>
+	</Transition>
     <div class="viewscreen">
       <WarpField />
       <div class="screen-interface">
@@ -266,8 +308,8 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="room-actions" aria-label="Launcher controls">
-		<ViewscreenButton variant="console" tone="tan" edge="single" @click="openConfigEditor">Open Config Editor</ViewscreenButton>
 		<ViewscreenButton variant="console" tone="violet" edge="single" @click="openRawConfig">Open Raw Config</ViewscreenButton>
+		<ViewscreenButton variant="console" tone="tan" edge="single" @click="showConfig = true">Open Config Editor</ViewscreenButton>
       <ViewscreenButton variant="console" tone="red" edge="single" @click="openLogs">Open Logs</ViewscreenButton>
       <ViewscreenButton variant="console" tone="blue" edge="single" @click="showWizard = true">Multi-Instance</ViewscreenButton>
       <ViewscreenButton variant="console" tone="orange" edge="single" @click="launchGame">Launch Game</ViewscreenButton>
@@ -293,6 +335,64 @@ onBeforeUnmount(() => {
 	box-sizing: border-box;
 	overflow: hidden;
 	background: #020914 url("@/assets/briefing-room/backplate-chairless.png") center / 100% 100% no-repeat;
+}
+.config-drawer {
+	position: absolute;
+	z-index: 20;
+	top: 0;
+	left: 5%;
+	right: 5%;
+	height: min(82vh, 660px);
+	display: grid;
+	grid-template-rows: 44px minmax(0, 1fr) 18px;
+	background: rgba(9, 10, 12, 0.98);
+	border: 1px solid rgba(255, 255, 255, 0.18);
+	border-top: 0;
+	border-radius: 0 0 18px 18px;
+	box-shadow: 0 24px 70px rgba(0, 0, 0, 0.78), 0 0 26px rgba(235, 148, 58, 0.2);
+	overflow: hidden;
+}
+.config-drawer__bar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0 14px 0 18px;
+	background: linear-gradient(90deg, #15171a, #202126 70%, #111214);
+	border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+	color: #f7f7f7;
+	letter-spacing: 0.08em;
+}
+.config-drawer__bar div { display: flex; align-items: baseline; gap: 10px; }
+.config-drawer__bar strong { color: var(--lcars-orange); font-size: 17px; }
+.config-drawer__bar span { color: #8d939d; font-size: 11px; text-transform: uppercase; }
+.config-drawer__bar button {
+	border: 1px solid rgba(255, 255, 255, 0.22);
+	border-radius: 7px;
+	background: #24262b;
+	color: #f2f2f2;
+	padding: 5px 13px;
+	text-transform: uppercase;
+	font-size: 11px;
+	font-weight: 700;
+	cursor: pointer;
+}
+.config-drawer__bar button:hover,
+.config-drawer__bar button:focus-visible { border-color: var(--lcars-orange); outline: none; }
+.config-drawer iframe { width: 100%; height: 100%; border: 0; background: #101113; }
+.config-drawer__rail {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: linear-gradient(180deg, #25272b, #111214);
+	border-top: 1px solid rgba(255, 255, 255, 0.14);
+}
+.config-drawer__rail span { width: 90px; height: 3px; border-radius: 3px; background: #73777e; box-shadow: 0 0 8px rgba(255, 255, 255, 0.16); }
+.config-lower-enter-active { animation: lower-panel 620ms cubic-bezier(0.2, 0.82, 0.24, 1); }
+.config-lower-leave-active { animation: lower-panel 360ms cubic-bezier(0.62, 0, 0.78, 0.24) reverse; }
+@keyframes lower-panel {
+	0% { transform: translateY(calc(-100% - 32px)); }
+	72% { transform: translateY(8px); }
+	100% { transform: translateY(0); }
 }
 .viewscreen {
 	position: absolute;
@@ -445,6 +545,8 @@ h1 {
 }
 @media (prefers-reduced-motion: reduce) {
 	.channel-toggle::before { animation: none !important; }
+	.config-lower-enter-active,
+	.config-lower-leave-active { animation-duration: 1ms; }
 }
 @media (max-aspect-ratio: 4 / 3) {
 	.briefing-room { background-size: cover; }
