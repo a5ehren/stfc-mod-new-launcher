@@ -13,7 +13,7 @@
     <use href="#viewscreen-path" class="rail" />
     <use href="#viewscreen-path" class="pulse" />
     <use href="#viewscreen-path" class="pulse pulse-reverse" />
-    <circle class="corner corner-a" cx="54" cy="3" r="5" />
+    <circle class="corner" cx="54" cy="3" r="5" />
     <circle class="corner corner-b" cx="1457" cy="3" r="5" />
     <circle class="corner corner-c" cx="54" cy="685" r="5" />
     <circle class="corner corner-d" cx="1457" cy="685" r="5" />

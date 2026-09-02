@@ -15,7 +15,8 @@ const emit = defineEmits<{ click: [] }>();
 <template>
   <button
     class="viewscreen-button"
-    :class="[`tone-${tone}`, `edge-${edge}`, `variant-${variant}`]"
+    :class="[`edge-${edge}`, `variant-${variant}`]"
+    :style="{ '--control-accent': `var(--lcars-${tone})` }"
     :disabled="disabled"
     @click="emit('click')"
   >
@@ -25,7 +26,6 @@ const emit = defineEmits<{ click: [] }>();
 
 <style scoped>
 .viewscreen-button {
-	--control-accent: var(--lcars-violet);
 	position: relative;
 	isolation: isolate;
 	overflow: hidden;
@@ -111,12 +111,6 @@ const emit = defineEmits<{ click: [] }>();
 .variant-console:active {
 	transform: perspective(520px) rotateX(13deg) translateY(5px) scale(0.975);
 }
-.tone-violet { --control-accent: var(--lcars-violet); }
-.tone-orange { --control-accent: var(--lcars-orange); }
-.tone-tan { --control-accent: var(--lcars-tan); }
-.tone-blue { --control-accent: var(--lcars-blue); }
-.tone-red { --control-accent: var(--lcars-red); }
-.tone-gold { --control-accent: var(--lcars-gold); }
 @keyframes control-border-travel { to { transform: rotate(1turn); } }
 @keyframes control-activate {
 	0% { transform: scale(0); opacity: 0.9; }

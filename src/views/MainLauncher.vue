@@ -239,7 +239,7 @@ onBeforeUnmount(() => {
 
 <template>
   <MultiInstanceWizard v-if="showWizard" @done="onWizardDone" />
-  <section v-else class="lcars-shell compact-header briefing-room">
+  <section v-else class="briefing-room">
     <div class="viewscreen">
       <WarpField />
       <div class="screen-interface">
