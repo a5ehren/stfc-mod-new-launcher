@@ -229,6 +229,7 @@ async function onWizardDone() {
 
 async function handleConfigMessage(event: MessageEvent) {
 	if (event.source !== configFrame.value?.contentWindow) return;
+	if (event.origin !== window.location.origin) return;
 
 	if (event.data?.type === "modconfig-ready") {
 		const toml = await readRawConfig();
