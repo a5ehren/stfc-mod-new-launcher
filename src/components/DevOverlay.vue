@@ -39,36 +39,64 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
 <style scoped>
 .dev-overlay {
   position: fixed;
-  left: 16px;
+  right: 16px;
   bottom: 16px;
   z-index: 9999;
   max-width: min(720px, calc(100vw - 32px));
   pointer-events: none;
 }
 .dev-overlay__panel {
-  pointer-events: auto;
-  border: 1px solid rgba(255, 160, 0, 0.45);
-  background: rgba(0, 0, 0, 0.86);
-  color: var(--lcars-tan);
-  padding: 14px 16px 12px;
-  border-radius: 18px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(10px);
+	position: relative;
+	isolation: isolate;
+	overflow: hidden;
+	pointer-events: auto;
+	border: 1px solid rgba(87, 201, 255, 0.48);
+	background:
+		linear-gradient(135deg, rgba(18, 51, 80, 0.52), transparent 46%),
+		rgba(1, 9, 22, 0.92);
+	color: #bcecff;
+	padding: 16px 20px 14px;
+	clip-path: polygon(14px 0, calc(100% - 14px) 0, 100% 14px, 100% calc(100% - 14px), calc(100% - 14px) 100%, 14px 100%, 0 calc(100% - 14px), 0 14px);
+	box-shadow: 0 0 18px rgba(87, 201, 255, 0.22), 0 16px 42px rgba(0, 0, 0, 0.65);
+	backdrop-filter: blur(14px);
+}
+.dev-overlay__panel::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	z-index: -1;
+	background:
+		linear-gradient(90deg, transparent 0 15%, #d8f5ff 24%, #188dff 30%, transparent 39%) 0 0 / 240% 2px no-repeat,
+		linear-gradient(270deg, transparent 0 15%, #d8f5ff 24%, #188dff 30%, transparent 39%) 100% 100% / 240% 2px no-repeat;
+	animation: dev-frame-travel 5.2s linear infinite;
+	pointer-events: none;
+}
+.dev-overlay__panel::after {
+	content: "";
+	position: absolute;
+	inset: 6px;
+	z-index: -1;
+	border: 1px solid rgba(87, 201, 255, 0.13);
+	clip-path: inherit;
+	pointer-events: none;
 }
 .has-error .dev-overlay__panel {
-  border-color: rgba(255, 96, 96, 0.65);
+	border-color: rgba(255, 96, 96, 0.78);
+	box-shadow: 0 0 22px rgba(255, 72, 72, 0.28), 0 16px 42px rgba(0, 0, 0, 0.65);
 }
 .dev-overlay__label {
-  color: var(--lcars-orange);
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.16em;
-  margin-bottom: 6px;
+	color: #79d9ff;
+	font-size: 12px;
+	text-transform: uppercase;
+	letter-spacing: 0.24em;
+	margin-bottom: 7px;
+	text-shadow: 0 0 10px rgba(87, 201, 255, 0.7);
 }
 .dev-overlay__status {
-  color: var(--lcars-text);
-  font-size: 16px;
-  line-height: 1.35;
+	color: #eefbff;
+	font-size: 16px;
+	line-height: 1.35;
+	text-shadow: 0 0 12px rgba(87, 201, 255, 0.38);
 }
 .dev-overlay__error {
   margin: 10px 0 0;
@@ -79,15 +107,23 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
   max-width: 64ch;
 }
 .dev-overlay__hint {
-  margin-top: 10px;
-  color: var(--lcars-tan);
-  font-size: 12px;
+	margin-top: 10px;
+	color: #80b9d4;
+	font-size: 12px;
 }
 kbd {
-	border: 1px solid rgba(255, 255, 255, 0.18);
-  border-bottom-width: 2px;
-  border-radius: 6px;
-  padding: 0 6px;
-  font: inherit;
+	border: 1px solid rgba(87, 201, 255, 0.42);
+	border-bottom-width: 2px;
+	border-radius: 6px;
+	padding: 0 6px;
+	font: inherit;
+	color: #d8f5ff;
+	background: rgba(24, 141, 255, 0.12);
+}
+@keyframes dev-frame-travel {
+	to { background-position: 240% 0, -140% 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+	.dev-overlay__panel::before { animation: none; }
 }
 </style>
