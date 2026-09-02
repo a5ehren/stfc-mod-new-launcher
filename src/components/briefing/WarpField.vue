@@ -15,8 +15,7 @@ type Star = {
 
 function reset(star: Star, width: number, height: number, randomDepth = false) {
 	const angle = Math.random() * Math.PI * 2;
-	const radius =
-		Math.random() ** 0.55 * Math.max(width, height) * 0.78 + 8;
+	const radius = Math.random() ** 0.55 * Math.max(width, height) * 0.78 + 8;
 	star.x = Math.cos(angle) * radius;
 	star.y = Math.sin(angle) * radius;
 	star.z = randomDepth ? Math.random() * width + 1 : width;

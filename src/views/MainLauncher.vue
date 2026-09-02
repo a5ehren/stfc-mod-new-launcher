@@ -2,10 +2,10 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import InstancePanel from "@/components/InstancePanel.vue";
+import ViewscreenButton from "@/components/briefing/ViewscreenButton.vue";
 import ViewscreenFrame from "@/components/briefing/ViewscreenFrame.vue";
 import WarpField from "@/components/briefing/WarpField.vue";
-import ViewscreenButton from '@/components/briefing/ViewscreenButton.vue';
+import InstancePanel from "@/components/InstancePanel.vue";
 import StatusStrip from "@/components/StatusStrip.vue";
 import {
 	checkGameUpdate,
