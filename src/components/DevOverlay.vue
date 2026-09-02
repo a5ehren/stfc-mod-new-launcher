@@ -68,7 +68,8 @@ onUnmounted(() => {
 .dev-overlay {
   position: fixed;
   right: 16px;
-  bottom: 16px;
+  bottom: var(--footer-control-centerline);
+  transform: translateY(50%);
   z-index: 9999;
   max-width: min(720px, calc(100vw - 32px));
   pointer-events: none;

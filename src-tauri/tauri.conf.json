@@ -16,7 +16,10 @@
 				"title": "STFC Community Mod Launcher",
 				"width": 1000,
 				"height": 520,
-				"resizable": false
+				"minWidth": 800,
+				"minHeight": 416,
+				"resizable": true,
+				"decorations": false
 			}
 		],
 		"security": {

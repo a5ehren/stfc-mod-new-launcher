@@ -294,14 +294,25 @@ onBeforeUnmount(() => {
           <span class="status-light" :class="{ warning: warning }"></span>
           <StatusStrip class="launch-status" :message="message" :warning="warning" />
         </div>
-        <div v-if="updateActions.length > 0" class="update-stack">
-          <ViewscreenButton
-            v-for="(action, index) in updateActions"
-            :key="action.key"
-            :tone="action.tone"
-            :edge="updateEdge(index, updateActions.length)"
-            @click="action.run"
-          >{{ action.label }}</ViewscreenButton>
+        <div class="screen-actions">
+          <button
+            class="channel-toggle"
+            :aria-pressed="status?.modStatus.channel === 'prerelease'"
+            title="Switch mod channel"
+            @click="toggleChannel"
+          >
+            <span :class="{ active: status?.modStatus.channel !== 'prerelease' }">Stable</span>
+            <span :class="{ active: status?.modStatus.channel === 'prerelease' }">Prerelease</span>
+          </button>
+          <div v-if="updateActions.length > 0" class="update-stack">
+            <ViewscreenButton
+              v-for="(action, index) in updateActions"
+              :key="action.key"
+              :tone="action.tone"
+              :edge="updateEdge(index, updateActions.length)"
+              @click="action.run"
+            >{{ action.label }}</ViewscreenButton>
+          </div>
         </div>
         <InstancePanel v-if="status?.multiInstance?.enabled" />
       </div>
@@ -315,16 +326,6 @@ onBeforeUnmount(() => {
       <ViewscreenButton variant="console" tone="blue" edge="single" @click="showWizard = true">Multi-Instance</ViewscreenButton>
       <ViewscreenButton variant="console" tone="orange" edge="single" @click="launchGame">Launch Game</ViewscreenButton>
     </div>
-
-    <button
-      class="channel-toggle"
-      :aria-pressed="status?.modStatus.channel === 'prerelease'"
-      title="Switch mod channel"
-      @click="toggleChannel"
-    >
-      <span :class="{ active: status?.modStatus.channel !== 'prerelease' }">Stable</span>
-      <span :class="{ active: status?.modStatus.channel === 'prerelease' }">Prerelease</span>
-    </button>
   </section>
 </template>
 
@@ -454,12 +455,16 @@ h1 {
 }
 .status-light.warning { background: var(--lcars-gold); box-shadow: 0 0 12px var(--lcars-gold); }
 .launch-status { color: #d9f5ff; font-size: clamp(13px, 1.3vw, 18px); }
-.update-stack {
+.screen-actions {
 	grid-column: 2;
 	grid-row: 1;
 	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: 8px;
 	align-self: start;
 }
+.update-stack { display: flex; }
 .update-stack :deep(.viewscreen-button) {
 	height: 38px;
 	min-width: 110px;
@@ -475,7 +480,8 @@ h1 {
 	position: absolute;
 	left: 5.5%;
 	right: 25%;
-	bottom: 4%;
+	bottom: var(--footer-control-centerline);
+	transform: translateY(50%);
 	display: grid;
 	grid-template-columns: repeat(5, 1fr);
 	gap: clamp(10px, 2vw, 32px);
@@ -497,10 +503,7 @@ h1 {
 	padding: 12px;
 }
 .channel-toggle {
-	position: absolute;
-	right: 4.5%;
-	top: 2.8%;
-	z-index: 2;
+	position: relative;
 	border: 1px solid #63cfff;
 	border-radius: 999px;
 	background: rgba(1, 10, 24, 0.86);
