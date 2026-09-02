@@ -27,7 +27,7 @@ pub fn parse_update_plan(xml: &str) -> LauncherResult<XsollaPlan> {
     loop {
         match reader.read_event_into(&mut buffer) {
             Ok(Event::Empty(event)) | Ok(Event::Start(event))
-                if event.name().as_ref() == b"action" =>
+                if event.name().as_ref() == "action" =>
             {
                 let attrs = event
                     .attributes()
@@ -37,31 +37,31 @@ pub fn parse_update_plan(xml: &str) -> LauncherResult<XsollaPlan> {
                         context: "parsing Xsolla action attributes".into(),
                         message,
                     })?;
-                let get = |name: &[u8]| -> Option<String> {
+                let get = |name: &str| -> Option<String> {
                     attrs
                         .iter()
                         .find(|attr| attr.key.as_ref() == name)
-                        .map(|attr| String::from_utf8_lossy(attr.value.as_ref()).to_string())
+                        .map(|attr| attr.value.to_string())
                 };
-                match get(b"type").as_deref() {
+                match get("type").as_deref() {
                     Some("torrent_download") => actions.push(XsollaAction::Download {
-                        url: get(b"alt_data_link").unwrap_or_default(),
-                        size: get(b"data_size")
+                        url: get("alt_data_link").unwrap_or_default(),
+                        size: get("data_size")
                             .and_then(|value| value.parse().ok())
                             .unwrap_or(0),
-                        to: get(b"alt_to").unwrap_or_default(),
+                        to: get("alt_to").unwrap_or_default(),
                     }),
                     Some("extract") => actions.push(XsollaAction::Extract {
-                        file: get(b"file").unwrap_or_default(),
-                        to: get(b"to").unwrap_or_default(),
+                        file: get("file").unwrap_or_default(),
+                        to: get("to").unwrap_or_default(),
                     }),
                     Some("patch") => actions.push(XsollaAction::Patch {
-                        binaries: get(b"binaries").unwrap_or_default(),
-                        patch: get(b"patch").unwrap_or_default(),
+                        binaries: get("binaries").unwrap_or_default(),
+                        patch: get("patch").unwrap_or_default(),
                     }),
                     Some("wait_actions") => actions.push(XsollaAction::Wait),
                     Some("version") => {
-                        let version = get(b"version")
+                        let version = get("version")
                             .and_then(|value| value.parse::<i32>().ok())
                             .ok_or_else(|| LauncherError::InvalidData {
                                 context: "parsing Xsolla version action".into(),
