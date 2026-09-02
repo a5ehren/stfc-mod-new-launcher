@@ -33,7 +33,7 @@ function resize() {
 	element.height = bounds.height * ratio;
 	const context = element.getContext("2d");
 	context?.setTransform(ratio, 0, 0, ratio, 0, 0);
-	stars = Array.from({ length: 420 }, () => {
+	stars = Array.from({ length: 120 }, () => {
 		const star = {} as Star;
 		reset(star, bounds.width, bounds.height, true);
 		return star;
