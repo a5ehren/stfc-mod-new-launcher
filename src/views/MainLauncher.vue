@@ -283,11 +283,11 @@ onBeforeUnmount(() => {
 	  </aside>
 	</Transition>
     <div class="viewscreen">
-      <WarpField />
+      <WarpField :paused="showConfig" />
       <div class="screen-interface">
         <div class="title-block">
-          <span class="kicker">Starfleet terminal // 1701</span>
-          <h1>STFC Community<br />Mod Launcher</h1>
+          <span class="kicker">STFC Community Mod // 1701</span>
+          <h1>Launcher <span class="kicker">v<span class="kicker-larger">0.0.1</span></span></h1>
         </div>
         <div class="screen-status">
           <span class="status-light" :class="{ warning: warning }"></span>
@@ -304,12 +304,12 @@ onBeforeUnmount(() => {
         </div>
         <InstancePanel v-if="status?.multiInstance?.enabled" />
       </div>
-      <ViewscreenFrame class="viewscreen-effects" />
+      <ViewscreenFrame class="viewscreen-effects" :paused="showConfig" />
     </div>
 
-    <div class="room-actions" aria-label="Launcher controls">
-		<ViewscreenButton variant="console" tone="violet" edge="single" @click="openRawConfig">Open Raw Config</ViewscreenButton>
+	<div class="room-actions" aria-label="Launcher controls">
 		<ViewscreenButton variant="console" tone="tan" edge="single" @click="showConfig = true">Open Config Editor</ViewscreenButton>
+		<ViewscreenButton variant="console" tone="violet" edge="single" @click="openRawConfig">Open Raw Config</ViewscreenButton>
       <ViewscreenButton variant="console" tone="red" edge="single" @click="openLogs">Open Logs</ViewscreenButton>
       <ViewscreenButton variant="console" tone="blue" edge="single" @click="showWizard = true">Multi-Instance</ViewscreenButton>
       <ViewscreenButton variant="console" tone="orange" edge="single" @click="launchGame">Launch Game</ViewscreenButton>
@@ -413,13 +413,21 @@ onBeforeUnmount(() => {
 	box-sizing: border-box;
 	background: linear-gradient(90deg, rgba(0, 6, 18, 0.78), transparent 58%);
 }
-.title-block { align-self: start; }
+.title-block {
+	align-self: start;
+}
 .kicker {
 	color: #79d9ff;
 	font-size: clamp(10px, 1vw, 15px);
 	letter-spacing: 0.24em;
-	text-transform: uppercase;
+	 text-transform: uppercase;
+	font-variant-caps: small-caps;
 }
+
+.kicker-larger {
+	font-size: clamp(20px, 2vw, 30px);
+}
+
 h1 {
 	margin: 8px 0 0;
 	color: #eefbff;
