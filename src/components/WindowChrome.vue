@@ -27,7 +27,9 @@ const interactiveSelector = [
 ].join(",");
 
 function isInteractive(target: EventTarget | null) {
-	return target instanceof Element && target.closest(interactiveSelector) !== null;
+	return (
+		target instanceof Element && target.closest(interactiveSelector) !== null
+	);
 }
 
 function dragWindow(event: PointerEvent) {
