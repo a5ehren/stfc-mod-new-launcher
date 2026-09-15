@@ -26,3 +26,4 @@ dist-ssr
 
 # Planning docs (local only)
 docs/
+package-lock.json

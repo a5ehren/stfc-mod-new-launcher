@@ -56,7 +56,8 @@ launcher build, so CI does not need a ModConfig checkout or a separately
 running ModConfig server.
 
 To refresh the embedded editor, check out the ModConfig repository next to
-this repository as `../config`, then run:
+this repository as `../config` (on its `dev` branch — the launcher bridge is
+not merged to `main` yet), then run:
 
 ```sh
 cd ../config

@@ -2,7 +2,7 @@
 	"$schema": "../gen/schemas/desktop-schema.json",
 	"identifier": "default",
 	"description": "Default launcher capability",
-	"windows": ["main", "config-editor"],
+	"windows": ["main"],
 	"permissions": [
 		"core:default",
 		"core:window:allow-start-dragging",
@@ -10,7 +10,6 @@
 		"core:window:allow-minimize",
 		"core:window:allow-toggle-maximize",
 		"core:window:allow-close",
-		"core:webview:allow-create-webview-window",
 		"opener:default",
 		"dialog:default",
 		"process:default",

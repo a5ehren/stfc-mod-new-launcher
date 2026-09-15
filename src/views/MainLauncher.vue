@@ -27,6 +27,7 @@ import {
 import { formatError } from "@/lib/formatError";
 import type { LauncherStatus } from "@/types/launcher";
 import MultiInstanceWizard from "@/views/MultiInstanceWizard.vue";
+import { version } from "../../package.json";
 
 const status = ref<LauncherStatus | null>(null);
 const message = ref("Initializing launcher");
@@ -227,29 +228,38 @@ async function onWizardDone() {
 	await refresh();
 }
 
+function closeConfigOnEscape(event: KeyboardEvent) {
+	if (event.key === "Escape") showConfig.value = false;
+}
+
 async function handleConfigMessage(event: MessageEvent) {
 	if (event.source !== configFrame.value?.contentWindow) return;
 	if (event.origin !== window.location.origin) return;
 
-	if (event.data?.type === "modconfig-ready") {
-		const toml = await readRawConfig();
-		configFrame.value?.contentWindow?.postMessage(
-			{ type: "stfc-launcher-config", toml },
-			window.location.origin,
-		);
-	}
+	try {
+		if (event.data?.type === "modconfig-ready") {
+			const toml = await readRawConfig();
+			configFrame.value?.contentWindow?.postMessage(
+				{ type: "stfc-launcher-config", toml },
+				window.location.origin,
+			);
+		}
 
-	if (
-		event.data?.type === "modconfig-save" &&
-		typeof event.data.toml === "string"
-	) {
-		await saveRawConfig(event.data.toml);
-		message.value = "Mod configuration saved";
+		if (
+			event.data?.type === "modconfig-save" &&
+			typeof event.data.toml === "string"
+		) {
+			await saveRawConfig(event.data.toml);
+			message.value = "Mod configuration saved";
+		}
+	} catch (error) {
+		message.value = `Mod configuration failed: ${formatError(error)}`;
 	}
 }
 
 onMounted(async () => {
 	window.addEventListener("message", handleConfigMessage);
+	window.addEventListener("keydown", closeConfigOnEscape);
 	unlistenProgress = await onProgress((event) => {
 		message.value = event.message;
 	});
@@ -258,6 +268,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
 	window.removeEventListener("message", handleConfigMessage);
+	window.removeEventListener("keydown", closeConfigOnEscape);
 	unlistenProgress?.();
 	unlistenProgress = null;
 });
@@ -279,6 +290,7 @@ onBeforeUnmount(() => {
 		  ref="configFrame"
 		  title="STFC Mod Config"
 		  src="/modconfig/index.html?launcher=1"
+		  sandbox="allow-scripts allow-same-origin"
 		/>
 		<div class="config-drawer__rail" aria-hidden="true"><span></span></div>
 	  </aside>
@@ -288,7 +300,7 @@ onBeforeUnmount(() => {
       <div class="screen-interface">
         <div class="title-block">
           <span class="kicker">STFC Community Mod // 1701</span>
-          <h1>Launcher <span class="kicker">v<span class="kicker-larger">0.0.1</span></span></h1>
+          <h1>Launcher <span class="kicker">v<span class="kicker-larger">{{ version }}</span></span></h1>
         </div>
         <div class="screen-status">
           <span class="status-light" :class="{ warning: warning }"></span>
@@ -422,8 +434,7 @@ onBeforeUnmount(() => {
 	color: #79d9ff;
 	font-size: clamp(10px, 1vw, 15px);
 	letter-spacing: 0.24em;
-	 text-transform: uppercase;
-	font-variant-caps: small-caps;
+	text-transform: uppercase;
 }
 
 .kicker-larger {

@@ -1,17 +1,10 @@
 <script setup lang="ts">
-import { getCurrentWindow } from "@tauri-apps/api/window";
-import { computed, onMounted } from "vue";
+import { onMounted } from "vue";
 import DevOverlay from "@/components/DevOverlay.vue";
 import WindowChrome from "@/components/WindowChrome.vue";
 import { setBootstrapStatus } from "@/lib/bootstrap-status";
-import ConfigEditor from "@/views/ConfigEditor.vue";
 import MainLauncher from "@/views/MainLauncher.vue";
 import "@/styles/lcars.css";
-
-const windowLabel = getCurrentWindow().label;
-const activeView = computed(() =>
-	windowLabel === "config-editor" ? ConfigEditor : MainLauncher,
-);
 
 onMounted(() => {
 	setBootstrapStatus("Launcher ready");
@@ -19,7 +12,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <WindowChrome v-if="windowLabel === 'main'" />
+  <WindowChrome />
   <DevOverlay />
-  <component :is="activeView" />
+  <MainLauncher />
 </template>
