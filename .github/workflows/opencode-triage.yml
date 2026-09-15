@@ -26,7 +26,7 @@ jobs:
             return days >= 14;
           result-encoding: string
 
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7
         if: steps.check.outputs.result == 'true'
         with:
           persist-credentials: false
@@ -36,7 +36,9 @@ jobs:
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
         with:
-          model: opencode/nemotron-3-ultra-free
+          model: opencode/muse-spark-1.3-contributor-free
           prompt: |
-            Review this issue. Add the 'bug'/'enhancement'/'duplicate' tag as needed.
-            Triage the expected effort level and/or impact against the codebase and add the HIGH/MEDIUM/LOW tag as well.
+            Review this issue. If there's a clear fix or relevant docs:
+            - Provide documentation links
+            - Add error handling guidance for code examples
+            Otherwise, do not comment.
