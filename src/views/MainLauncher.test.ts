@@ -1,11 +1,14 @@
 import { open } from "@tauri-apps/plugin-dialog";
-import { mount } from "@vue/test-utils";
-import { describe, expect, it, vi } from "vitest";
+import { enableAutoUnmount, mount } from "@vue/test-utils";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { nextTick } from "vue";
 import ViewscreenButton from "@/components/briefing/ViewscreenButton.vue";
 import {
 	getLauncherStatus,
 	launchGame,
 	miInstanceStatus,
+	readRawConfig,
+	saveRawConfig,
 	setGamePath,
 	updateGame,
 	validateGamePath,
@@ -35,7 +38,8 @@ vi.mock("@/lib/commands", () => ({
 	setModChannel: vi.fn(),
 	openLogs: vi.fn(),
 	openRawConfig: vi.fn(),
-	openConfigEditor: vi.fn(),
+	readRawConfig: vi.fn(async () => ""),
+	saveRawConfig: vi.fn(),
 	launchGame: vi.fn(),
 	setGamePath: vi.fn(),
 	validateGamePath: vi.fn(),
@@ -68,6 +72,8 @@ vi.mock("@tauri-apps/plugin-process", () => ({
 }));
 
 describe("MainLauncher", () => {
+	enableAutoUnmount(afterEach);
+
 	it("renders permanent and conditional actions", async () => {
 		const wrapper = mount(MainLauncher);
 		await new Promise((resolve) => setTimeout(resolve, 0));
@@ -393,5 +399,78 @@ describe("MainLauncher", () => {
 		expect(open).toHaveBeenCalled();
 		expect(setGamePath).toHaveBeenCalledWith("/game");
 		expect(wrapper.text()).toContain("Game update complete");
+	});
+	async function mountWithConfigDrawer() {
+		const wrapper = mount(MainLauncher, { attachTo: document.body });
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		await wrapper
+			.findAllComponents(ViewscreenButton)
+			.find((button) => button.text() === "Open Config Editor")
+			?.trigger("click");
+		await nextTick();
+		const iframe = wrapper.find("iframe");
+		expect(iframe.exists()).toBe(true);
+		return { wrapper, frame: iframe.element as HTMLIFrameElement };
+	}
+
+	function dispatchConfigMessage(frame: HTMLIFrameElement, data: unknown) {
+		window.dispatchEvent(
+			new MessageEvent("message", {
+				data,
+				origin: window.location.origin,
+				source: frame.contentWindow,
+			}),
+		);
+	}
+
+	it("pushes TOML to the modconfig iframe when it reports ready", async () => {
+		vi.mocked(readRawConfig).mockResolvedValueOnce("[ui]\nscale = 1\n");
+
+		const { frame } = await mountWithConfigDrawer();
+		const postMessage = vi.spyOn(frame.contentWindow as Window, "postMessage");
+
+		dispatchConfigMessage(frame, { type: "modconfig-ready" });
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		expect(readRawConfig).toHaveBeenCalled();
+		expect(postMessage).toHaveBeenCalledWith(
+			{ type: "stfc-launcher-config", toml: "[ui]\nscale = 1\n" },
+			window.location.origin,
+		);
+	});
+
+	it("saves TOML sent by the modconfig iframe", async () => {
+		const { wrapper, frame } = await mountWithConfigDrawer();
+
+		dispatchConfigMessage(frame, {
+			type: "modconfig-save",
+			toml: "[a]\nb = 2\n",
+		});
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		expect(saveRawConfig).toHaveBeenCalledWith("[a]\nb = 2\n");
+		expect(wrapper.text()).toContain("Mod configuration saved");
+	});
+
+	it("surfaces bridge errors instead of rejecting silently", async () => {
+		vi.mocked(readRawConfig).mockRejectedValueOnce(new Error("no config file"));
+
+		const { wrapper, frame } = await mountWithConfigDrawer();
+
+		dispatchConfigMessage(frame, { type: "modconfig-ready" });
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		expect(wrapper.text()).toContain(
+			"Mod configuration failed: Error: no config file",
+		);
+	});
+
+	it("closes the config drawer on Escape", async () => {
+		const { wrapper } = await mountWithConfigDrawer();
+
+		window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+		await nextTick();
+
+		expect(wrapper.find("iframe").exists()).toBe(false);
 	});
 });

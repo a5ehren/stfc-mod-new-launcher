@@ -36,10 +36,6 @@ export function openDevtools(): Promise<void> {
 	return invoke("open_devtools");
 }
 
-export function openConfigEditor(): Promise<void> {
-	return invoke("open_config_editor");
-}
-
 export function readRawConfig(): Promise<string> {
 	return invoke("read_raw_config");
 }
