@@ -232,6 +232,10 @@ function closeConfigOnEscape(event: KeyboardEvent) {
 	if (event.key === "Escape") showConfig.value = false;
 }
 
+function handleConfigLoadError() {
+	message.value = "Config editor failed to load";
+}
+
 async function handleConfigMessage(event: MessageEvent) {
 	if (event.source !== configFrame.value?.contentWindow) return;
 	if (event.origin !== window.location.origin) return;
@@ -251,6 +255,8 @@ async function handleConfigMessage(event: MessageEvent) {
 		) {
 			await saveRawConfig(event.data.toml);
 			message.value = "Mod configuration saved";
+		} else if (event.data?.type === "modconfig-save") {
+			message.value = "Invalid configuration: expected a TOML string";
 		}
 	} catch (error) {
 		message.value = `Mod configuration failed: ${formatError(error)}`;
@@ -291,6 +297,7 @@ onBeforeUnmount(() => {
 		  title="STFC Mod Config"
 		  src="/modconfig/index.html?launcher=1"
 		  sandbox="allow-scripts allow-same-origin"
+		  @error="handleConfigLoadError"
 		/>
 		<div class="config-drawer__rail" aria-hidden="true"><span></span></div>
 	  </aside>
