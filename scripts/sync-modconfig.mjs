@@ -23,6 +23,17 @@ async function copyDir(src, dest) {
 }
 
 try {
+	// Validate the source build exists BEFORE wiping any targets; a missing
+	// dist must not leave public/_astro|flags|modconfig empty.
+	for (const rel of ["_astro", "flags", "index.html"]) {
+		try {
+			await stat(path.join(modconfigDist, rel));
+		} catch {
+			throw new Error(
+				`Missing ${rel} in ${modconfigDist}; run "pnpm build" in the ModConfig checkout first`,
+			);
+		}
+	}
 	// Clean all three targets so stale hashed files from older builds cannot linger.
 	for (const dir of ["_astro", "flags", "modconfig"]) {
 		const target = path.join(publicRoot, dir);
@@ -38,16 +49,25 @@ try {
 
 	// Fail loudly if the build predates the launcher bridge.
 	const html = await readFile(path.join(publicRoot, "modconfig/index.html"), "utf8");
-	if (!html.includes('get("launcher")')) {
-		throw new Error("dist/index.html lacks the ?launcher=1 hook; rebuild ModConfig from a revision that includes it");
+	if (!/get\(['"]launcher['"]\)/.test(html)) {
+		throw new Error(
+			"dist/index.html lacks the ?launcher=1 hook; rebuild ModConfig from a revision that includes it",
+		);
 	}
 	const astroFiles = await readdir(path.join(publicRoot, "_astro"));
-	const appBundle = astroFiles.find((f) => /^mod-config-app\..*\.js$/.test(f));
-	const bundle = appBundle
-		? await readFile(path.join(publicRoot, "_astro", appBundle), "utf8")
-		: "";
-	if (!bundle.includes("modconfig-ready")) {
-		throw new Error("ModConfig app bundle lacks the launcher message bridge (modconfig-ready)");
+	const bundles = astroFiles.filter((f) => /\.js$/.test(f));
+	const bridge = (
+		await Promise.all(
+			bundles.map(async (f) => {
+				const content = await readFile(path.join(publicRoot, "_astro", f), "utf8");
+				return content.includes("modconfig-ready") ? f : null;
+			}),
+		)
+	).find(Boolean);
+	if (!bridge) {
+		throw new Error(
+			"No ModConfig bundle contains the launcher message bridge (modconfig-ready)",
+		);
 	}
 
 	console.log(`Synced the modconfig build from ${modconfigRoot} into launcher/public.`);

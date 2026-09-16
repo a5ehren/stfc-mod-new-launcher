@@ -413,11 +413,15 @@ describe("MainLauncher", () => {
 		return { wrapper, frame: iframe.element as HTMLIFrameElement };
 	}
 
-	function dispatchConfigMessage(frame: HTMLIFrameElement, data: unknown) {
+	function dispatchConfigMessage(
+		frame: HTMLIFrameElement,
+		data: unknown,
+		origin = window.location.origin,
+	) {
 		window.dispatchEvent(
 			new MessageEvent("message", {
 				data,
-				origin: window.location.origin,
+				origin,
 				source: frame.contentWindow,
 			}),
 		);
@@ -463,6 +467,33 @@ describe("MainLauncher", () => {
 		expect(wrapper.text()).toContain(
 			"Mod configuration failed: Error: no config file",
 		);
+	});
+
+	it("ignores messages with a mismatched origin, source, or malformed payload", async () => {
+		const { frame } = await mountWithConfigDrawer();
+		vi.mocked(saveRawConfig).mockClear();
+
+		// Wrong origin
+		dispatchConfigMessage(
+			frame,
+			{ type: "modconfig-save", toml: "[a]\n" },
+			"https://evil.example",
+		);
+
+		// Wrong source (no source set; jsdom sets event.source to null)
+		window.dispatchEvent(
+			new MessageEvent("message", {
+				data: { type: "modconfig-save", toml: "[b]\n" },
+				origin: window.location.origin,
+			}),
+		);
+
+		// Non-string toml
+		dispatchConfigMessage(frame, { type: "modconfig-save", toml: 42 });
+
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		expect(saveRawConfig).not.toHaveBeenCalled();
 	});
 
 	it("closes the config drawer on Escape", async () => {
