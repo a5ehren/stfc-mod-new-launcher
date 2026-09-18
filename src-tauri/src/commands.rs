@@ -437,7 +437,7 @@ pub fn mi_set_enabled(
 
 #[tauri::command]
 pub async fn mi_start_instance(state: State<'_, AppState>, name: String) -> CommandResult<u32> {
-    let (platform, shared_root, username, mod_library, log_file) = {
+    let (platform, shared_root, username, mod_library, log_file, config_file) = {
         let (username, _is_base) = resolve_instance_target(&state, &name)?;
         let persisted = state.persisted.lock().map_err(|_| ErrorDto {
             kind: "state".into(),
@@ -453,6 +453,7 @@ pub async fn mi_start_instance(state: State<'_, AppState>, name: String) -> Comm
                 .mods_dir
                 .join(crate::mod_manager::platform_library_name(platform)),
             state.paths.logs_dir.join(format!("instance-{name}.log")),
+            state.paths.config_file.clone(),
         )
     };
     tauri::async_runtime::spawn_blocking(move || {
@@ -462,6 +463,7 @@ pub async fn mi_start_instance(state: State<'_, AppState>, name: String) -> Comm
             &mod_library,
             &username,
             &log_file,
+            &config_file,
         )
     })
     .await
@@ -819,8 +821,14 @@ pub async fn launch_game(app: tauri::AppHandle, state: State<'_, AppState>) -> C
         })
         .await?;
     }
-    let plan = crate::launch::build_launch_plan(platform, &game_path, &mod_library, launch_mode)
-        .map_err(ErrorDto::from)?;
+    let plan = crate::launch::build_launch_plan(
+        platform,
+        &game_path,
+        &mod_library,
+        &state.paths.config_file,
+        launch_mode,
+    )
+    .map_err(ErrorDto::from)?;
     state
         .diagnostics
         .info("launch", &format!("launching with mode {launch_mode:?}"))

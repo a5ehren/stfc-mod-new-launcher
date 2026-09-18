@@ -16,8 +16,17 @@ pub fn build_launch_plan(
     platform: Platform,
     game_root: &Path,
     mod_library: &Path,
+    config_file: &Path,
     launch_mode: LaunchMode,
 ) -> LauncherResult<LaunchPlan> {
+    // The mod resolves its config relative to ~/Library/Preferences without this;
+    // point it at the launcher's managed config file instead.
+    let config_args = || {
+        vec![
+            "-ccm".to_string(),
+            config_file.to_string_lossy().into_owned(),
+        ]
+    };
     match (platform, launch_mode) {
         (Platform::MacOs, LaunchMode::Managed) => {
             let executable = game_root
@@ -55,7 +64,7 @@ pub fn build_launch_plan(
             );
             Ok(LaunchPlan {
                 executable: executable.to_string_lossy().to_string(),
-                args: Vec::new(),
+                args: config_args(),
                 environment,
                 working_dir: executable.parent().map(Path::to_path_buf),
             })
@@ -73,14 +82,14 @@ pub fn build_launch_plan(
             );
             Ok(LaunchPlan {
                 executable: executable.to_string_lossy().to_string(),
-                args: Vec::new(),
+                args: config_args(),
                 environment,
                 working_dir: Some(game_root.to_path_buf()),
             })
         }
         (Platform::Windows, LaunchMode::WindowsProxyDll) => Ok(LaunchPlan {
             executable: game_root.join("prime.exe").to_string_lossy().to_string(),
-            args: Vec::new(),
+            args: config_args(),
             environment: BTreeMap::new(),
             working_dir: Some(game_root.to_path_buf()),
         }),
@@ -129,9 +138,15 @@ mod tests {
             crate::models::Platform::MacOs,
             game_root,
             &mod_library,
+            std::path::Path::new("/launcher/community_patch_settings.toml"),
             crate::models::LaunchMode::Managed,
         )
         .expect("launch plan");
+
+        assert_eq!(
+            plan.args,
+            ["-ccm", "/launcher/community_patch_settings.toml"]
+        );
 
         assert_eq!(
             plan.executable,
@@ -161,6 +176,7 @@ mod tests {
             crate::models::Platform::MacOs,
             root.path(),
             &mod_library,
+            std::path::Path::new("/launcher/community_patch_settings.toml"),
             crate::models::LaunchMode::Managed,
         );
 
@@ -183,6 +199,7 @@ mod tests {
             crate::models::Platform::MacOs,
             game_root,
             &game_root.join("libstfc-community-mod.dylib"),
+            std::path::Path::new("/launcher/community_patch_settings.toml"),
             crate::models::LaunchMode::Managed,
         );
 
@@ -195,11 +212,15 @@ mod tests {
             crate::models::Platform::Windows,
             std::path::Path::new("C:/Games/STFC/game"),
             std::path::Path::new("C:/Games/STFC/game/version.dll"),
+            std::path::Path::new(
+                "C:/Users/x/AppData/Roaming/com.stfcmod.launcher/community_patch_settings.toml",
+            ),
             crate::models::LaunchMode::WindowsProxyDll,
         )
         .expect("launch plan");
 
         assert!(plan.executable.ends_with("prime.exe"));
         assert!(plan.environment.is_empty());
+        assert_eq!(plan.args[0], "-ccm");
     }
 }

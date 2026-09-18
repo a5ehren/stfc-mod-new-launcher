@@ -29,6 +29,7 @@ pub fn build_instance_plan(
     platform: Platform,
     shared_root: &Path,
     mod_library: &Path,
+    config_file: &Path,
     username: &str,
 ) -> LauncherResult<LaunchPlan> {
     let is_base = !username.starts_with(USER_PREFIX);
@@ -38,7 +39,13 @@ pub fn build_instance_plan(
             message: format!("refusing non-service username {username:?}"),
         });
     }
-    let inner = build_launch_plan(platform, shared_root, mod_library, LaunchMode::Managed)?;
+    let inner = build_launch_plan(
+        platform,
+        shared_root,
+        mod_library,
+        config_file,
+        LaunchMode::Managed,
+    )?;
     // The base account IS the current user: no sudo wrapper needed.
     if is_base {
         return Ok(inner);
@@ -54,6 +61,7 @@ pub fn build_instance_plan(
             ];
             args.extend(inner.environment.iter().map(|(k, v)| format!("{k}={v}")));
             args.push(inner.executable);
+            args.extend(inner.args);
             Ok(LaunchPlan {
                 executable: "/usr/bin/sudo".into(),
                 args,
@@ -128,6 +136,7 @@ pub fn start_instance(
     mod_library: &Path,
     username: &str,
     log_file: &Path,
+    config_file: &Path,
 ) -> LauncherResult<u32> {
     let matcher = process_matcher(platform);
     if instance_pid(username, matcher)?.is_some() {
@@ -136,7 +145,7 @@ pub fn start_instance(
             message: format!("instance {username} is already running"),
         });
     }
-    let plan = build_instance_plan(platform, shared_root, mod_library, username)?;
+    let plan = build_instance_plan(platform, shared_root, mod_library, config_file, username)?;
     let log = std::fs::File::create(log_file).map_err(|e| LauncherError::Io {
         context: format!("creating {}", log_file.display()),
         source: e,
@@ -426,7 +435,14 @@ mod tests {
         std::fs::write(&lib, "").expect("lib");
 
         let me = crate::instance_users::current_username().expect("USER env");
-        let plan = build_instance_plan(Platform::MacOs, game_root, &lib, &me).expect("plan");
+        let plan = build_instance_plan(
+            Platform::MacOs,
+            game_root,
+            &lib,
+            Path::new("/cfg/community_patch_settings.toml"),
+            &me,
+        )
+        .expect("plan");
         assert!(plan.executable.ends_with("Star Trek Fleet Command"));
     }
 
@@ -444,16 +460,21 @@ mod tests {
         let lib = game_root.join("libstfc-community-mod.dylib");
         std::fs::write(&lib, "").expect("lib");
 
-        let plan =
-            build_instance_plan(Platform::MacOs, game_root, &lib, "stfc-alt2").expect("plan");
+        let plan = build_instance_plan(
+            Platform::MacOs,
+            game_root,
+            &lib,
+            Path::new("/cfg/community_patch_settings.toml"),
+            "stfc-alt2",
+        )
+        .expect("plan");
         assert_eq!(plan.executable, "/usr/bin/sudo");
         let args = plan.args.join(" ");
         assert!(args.starts_with("-Hu stfc-alt2 env -u TMPDIR "));
         assert!(args.contains(&format!("DYLD_INSERT_LIBRARIES={}", lib.display())));
         assert!(args.contains("DYLD_LIBRARY_PATH="));
-        assert!(
-            args.ends_with("Star Trek Fleet Command.app/Contents/MacOS/Star Trek Fleet Command")
-        );
+        assert!(args.contains("Star Trek Fleet Command.app/Contents/MacOS/Star Trek Fleet Command"));
+        assert!(args.contains("-ccm /cfg/community_patch_settings.toml"));
     }
 
     #[test]
@@ -461,7 +482,13 @@ mod tests {
         // Defense in depth: username must carry the stfc- prefix even before
         // the registry check in the command layer.
         let root = tempfile::tempdir().expect("tempdir");
-        let result = build_instance_plan(Platform::MacOs, root.path(), root.path(), "root");
+        let result = build_instance_plan(
+            Platform::MacOs,
+            root.path(),
+            root.path(),
+            root.path(),
+            "root",
+        );
         assert!(result.is_err());
     }
 
