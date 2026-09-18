@@ -127,6 +127,23 @@ pub fn save_state(paths: &ManagedPaths, state: &PersistedState) -> LauncherResul
         })
 }
 
+pub fn clear_saved_data(paths: &ManagedPaths) -> LauncherResult<()> {
+    let entries = fs::read_dir(&paths.root)
+        .map_err(|err| io_context(format!("reading {}", paths.root.display()), err))?;
+    for entry in entries {
+        let entry =
+            entry.map_err(|err| io_context(format!("reading {}", paths.root.display()), err))?;
+        let path = entry.path();
+        let result = if path.is_dir() {
+            fs::remove_dir_all(&path)
+        } else {
+            fs::remove_file(&path)
+        };
+        result.map_err(|err| io_context(format!("removing {}", path.display()), err))?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -225,5 +242,22 @@ mod tests {
         assert_eq!(loaded.installed_mod_version, None);
         assert_eq!(loaded.installed_mod_checksum, None);
         assert_eq!(loaded.launch_mode, crate::models::LaunchMode::Managed);
+    }
+
+    #[test]
+    fn clear_saved_data_empties_root_but_keeps_it() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let paths = ManagedPaths::from_root(root.path().to_path_buf());
+        paths.ensure_dirs().expect("dirs");
+        std::fs::write(&paths.state_file, "{}").expect("state");
+        std::fs::write(&paths.config_file, "").expect("config");
+        std::fs::write(paths.mods_dir.join("mod.dll"), "x").expect("mod file");
+        std::fs::write(paths.logs_dir.join("launcher.log.jsonl"), "{}\n").expect("log");
+
+        clear_saved_data(&paths).expect("clear saved data");
+
+        assert!(paths.root.exists());
+        let mut entries = std::fs::read_dir(&paths.root).expect("read root");
+        assert!(entries.next().is_none());
     }
 }

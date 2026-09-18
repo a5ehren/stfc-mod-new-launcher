@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>STFC Mod Config</title>
+        <style>
+            html,
+            body {
+                margin: 0;
+                height: 100%;
+                background: #101113;
+            }
+            iframe {
+                width: 100%;
+                height: 100%;
+                border: 0;
+                display: block;
+            }
+            #error-banner {
+                position: fixed;
+                left: 12px;
+                right: 12px;
+                bottom: 12px;
+                padding: 10px 14px;
+                background: #c42b3b;
+                color: #fff;
+                font: 13px/1.4 system-ui, sans-serif;
+                border-radius: 8px;
+                z-index: 10;
+            }
+        </style>
+    </head>
+    <body>
+        <iframe
+            id="config-frame"
+            title="STFC Mod Config"
+            src="/modconfig/index.html?launcher=1"
+            sandbox="allow-scripts allow-same-origin"
+        ></iframe>
+        <div id="error-banner" hidden></div>
+        <script type="module" src="/src/config-window.ts"></script>
+    </body>
+</html>

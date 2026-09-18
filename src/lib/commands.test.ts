@@ -20,6 +20,7 @@ import {
 	openLogs,
 	openRawConfig,
 	readRawConfig,
+	resetLauncherData,
 	saveRawConfig,
 	setModChannel,
 	validateGamePath,
@@ -55,6 +56,14 @@ describe("command wrappers", () => {
 		await openLogs();
 
 		expect(invoke).toHaveBeenCalledWith("open_logs");
+	});
+
+	it("invokes reset launcher data command", async () => {
+		vi.mocked(invoke).mockResolvedValue(undefined);
+
+		await resetLauncherData();
+
+		expect(invoke).toHaveBeenCalledWith("reset_launcher_data");
 	});
 
 	it("invokes open raw config command", async () => {

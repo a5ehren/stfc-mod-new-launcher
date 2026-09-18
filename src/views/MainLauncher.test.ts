@@ -1,14 +1,13 @@
-import { open } from "@tauri-apps/plugin-dialog";
+import { confirm, open } from "@tauri-apps/plugin-dialog";
 import { enableAutoUnmount, mount } from "@vue/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { nextTick } from "vue";
 import ViewscreenButton from "@/components/briefing/ViewscreenButton.vue";
 import {
 	getLauncherStatus,
 	launchGame,
 	miInstanceStatus,
-	readRawConfig,
-	saveRawConfig,
+	openConfigWindow,
+	resetLauncherData,
 	setGamePath,
 	updateGame,
 	validateGamePath,
@@ -37,9 +36,9 @@ vi.mock("@/lib/commands", () => ({
 	})),
 	setModChannel: vi.fn(),
 	openLogs: vi.fn(),
+	resetLauncherData: vi.fn(),
 	openRawConfig: vi.fn(),
-	readRawConfig: vi.fn(async () => ""),
-	saveRawConfig: vi.fn(),
+	openConfigWindow: vi.fn(),
 	launchGame: vi.fn(),
 	setGamePath: vi.fn(),
 	validateGamePath: vi.fn(),
@@ -98,6 +97,35 @@ describe("MainLauncher", () => {
 			"Multi-Instance",
 			"Launch Game",
 		]);
+	});
+
+	it("right-click on Open Logs resets launcher data after confirm", async () => {
+		vi.mocked(resetLauncherData).mockClear();
+		const wrapper = mount(MainLauncher);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		const button = wrapper
+			.findAllComponents(ViewscreenButton)
+			.find((candidate) => candidate.text() === "Open Logs");
+
+		await button?.trigger("contextmenu");
+
+		expect(confirm).toHaveBeenCalled();
+		expect(vi.mocked(confirm).mock.calls[0]?.[0]).toMatch(/delete/i);
+		expect(resetLauncherData).toHaveBeenCalled();
+	});
+
+	it("declined confirm does not reset launcher data", async () => {
+		vi.mocked(resetLauncherData).mockClear();
+		vi.mocked(confirm).mockResolvedValueOnce(false);
+		const wrapper = mount(MainLauncher);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		const button = wrapper
+			.findAllComponents(ViewscreenButton)
+			.find((candidate) => candidate.text() === "Open Logs");
+
+		await button?.trigger("contextmenu");
+
+		expect(resetLauncherData).not.toHaveBeenCalled();
 	});
 
 	it("renders the instances panel only when multi-instance mode is enabled", async () => {
@@ -185,6 +213,40 @@ describe("MainLauncher", () => {
 
 		expect(wrapper.text()).not.toContain("Update Game");
 		expect(wrapper.text()).not.toContain("Update Mod");
+	});
+	it("distinguishes game updates from mod updates in the status strip", async () => {
+		const statusWith = (gameUpdate: boolean, modUpdate: boolean) =>
+			({
+				game: {
+					known: true,
+					path: "/game",
+					installedVersion: 168,
+					latestVersion: 169,
+					updateAvailable: gameUpdate,
+				},
+				modStatus: {
+					installed: true,
+					installedVersion: "v1.0.0",
+					latestVersion: "v1.1.0",
+					channel: "stable",
+					updateAvailable: modUpdate,
+					launchMode: "managed",
+				},
+				launcherUpdateAvailable: false,
+				multiInstance: { enabled: false, sharedGameRoot: null, instances: [] },
+			}) as never;
+
+		vi.mocked(getLauncherStatus).mockResolvedValueOnce(statusWith(true, false));
+		const gameOnly = mount(MainLauncher);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(gameOnly.text()).toContain("Game update available");
+		expect(gameOnly.text()).not.toContain("Mod update");
+
+		vi.mocked(getLauncherStatus).mockResolvedValueOnce(statusWith(false, true));
+		const modOnly = mount(MainLauncher);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(modOnly.text()).toContain("Mod update available");
+		expect(modOnly.text()).not.toContain("Game update");
 	});
 
 	it("surfaces launch errors in the status strip", async () => {
@@ -400,108 +462,14 @@ describe("MainLauncher", () => {
 		expect(setGamePath).toHaveBeenCalledWith("/game");
 		expect(wrapper.text()).toContain("Game update complete");
 	});
-	async function mountWithConfigDrawer() {
-		const wrapper = mount(MainLauncher, { attachTo: document.body });
+	it("opens the config editor in a separate window", async () => {
+		const wrapper = mount(MainLauncher);
 		await new Promise((resolve) => setTimeout(resolve, 0));
 		await wrapper
 			.findAllComponents(ViewscreenButton)
 			.find((button) => button.text() === "Open Config Editor")
 			?.trigger("click");
-		await nextTick();
-		const iframe = wrapper.find("iframe");
-		expect(iframe.exists()).toBe(true);
-		return { wrapper, frame: iframe.element as HTMLIFrameElement };
-	}
 
-	function dispatchConfigMessage(
-		frame: HTMLIFrameElement,
-		data: unknown,
-		origin = window.location.origin,
-	) {
-		window.dispatchEvent(
-			new MessageEvent("message", {
-				data,
-				origin,
-				source: frame.contentWindow,
-			}),
-		);
-	}
-
-	it("pushes TOML to the modconfig iframe when it reports ready", async () => {
-		vi.mocked(readRawConfig).mockResolvedValueOnce("[ui]\nscale = 1\n");
-
-		const { frame } = await mountWithConfigDrawer();
-		const postMessage = vi.spyOn(frame.contentWindow as Window, "postMessage");
-
-		dispatchConfigMessage(frame, { type: "modconfig-ready" });
-		await new Promise((resolve) => setTimeout(resolve, 0));
-
-		expect(readRawConfig).toHaveBeenCalled();
-		expect(postMessage).toHaveBeenCalledWith(
-			{ type: "stfc-launcher-config", toml: "[ui]\nscale = 1\n" },
-			window.location.origin,
-		);
-	});
-
-	it("saves TOML sent by the modconfig iframe", async () => {
-		const { wrapper, frame } = await mountWithConfigDrawer();
-
-		dispatchConfigMessage(frame, {
-			type: "modconfig-save",
-			toml: "[a]\nb = 2\n",
-		});
-		await new Promise((resolve) => setTimeout(resolve, 0));
-
-		expect(saveRawConfig).toHaveBeenCalledWith("[a]\nb = 2\n");
-		expect(wrapper.text()).toContain("Mod configuration saved");
-	});
-
-	it("surfaces bridge errors instead of rejecting silently", async () => {
-		vi.mocked(readRawConfig).mockRejectedValueOnce(new Error("no config file"));
-
-		const { wrapper, frame } = await mountWithConfigDrawer();
-
-		dispatchConfigMessage(frame, { type: "modconfig-ready" });
-		await new Promise((resolve) => setTimeout(resolve, 0));
-
-		expect(wrapper.text()).toContain(
-			"Mod configuration failed: Error: no config file",
-		);
-	});
-
-	it("ignores messages with a mismatched origin, source, or malformed payload", async () => {
-		const { frame } = await mountWithConfigDrawer();
-		vi.mocked(saveRawConfig).mockClear();
-
-		// Wrong origin
-		dispatchConfigMessage(
-			frame,
-			{ type: "modconfig-save", toml: "[a]\n" },
-			"https://evil.example",
-		);
-
-		// Wrong source (no source set; jsdom sets event.source to null)
-		window.dispatchEvent(
-			new MessageEvent("message", {
-				data: { type: "modconfig-save", toml: "[b]\n" },
-				origin: window.location.origin,
-			}),
-		);
-
-		// Non-string toml
-		dispatchConfigMessage(frame, { type: "modconfig-save", toml: 42 });
-
-		await new Promise((resolve) => setTimeout(resolve, 0));
-
-		expect(saveRawConfig).not.toHaveBeenCalled();
-	});
-
-	it("closes the config drawer on Escape", async () => {
-		const { wrapper } = await mountWithConfigDrawer();
-
-		window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
-		await nextTick();
-
-		expect(wrapper.find("iframe").exists()).toBe(false);
+		expect(openConfigWindow).toHaveBeenCalled();
 	});
 });

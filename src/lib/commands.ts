@@ -27,6 +27,10 @@ export function openLogs(): Promise<void> {
 	return invoke("open_logs");
 }
 
+export function resetLauncherData(): Promise<void> {
+	return invoke("reset_launcher_data");
+}
+
 export function openRawConfig(): Promise<void> {
 	return invoke("open_raw_config");
 }
@@ -42,6 +46,10 @@ export function readRawConfig(): Promise<string> {
 
 export function saveRawConfig(text: string): Promise<void> {
 	return invoke("save_raw_config", { text });
+}
+
+export function openConfigWindow(): Promise<void> {
+	return invoke("open_config_window");
 }
 
 export function validateGamePath(

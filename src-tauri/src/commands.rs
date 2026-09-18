@@ -5,6 +5,7 @@ use crate::models::LauncherStatus;
 use std::future::Future;
 use std::path::PathBuf;
 use tauri::Emitter;
+use tauri::Manager;
 use tauri::State;
 use tauri_plugin_opener::OpenerExt;
 
@@ -685,6 +686,16 @@ pub async fn open_logs(app: tauri::AppHandle, state: State<'_, AppState>) -> Com
     Ok(())
 }
 
+#[tauri::command]
+pub async fn reset_launcher_data(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> CommandResult<()> {
+    crate::storage::clear_saved_data(&state.paths)
+        .map_err(|err| reset_launcher_data_error(err.to_string()))?;
+    app.restart();
+}
+
 #[cfg(debug_assertions)]
 #[tauri::command]
 pub fn open_devtools(window: tauri::WebviewWindow) {
@@ -759,6 +770,31 @@ pub async fn open_raw_config(
             kind: "openRawConfig".into(),
             message: err.to_string(),
         })?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn open_config_window(app: tauri::AppHandle) -> CommandResult<()> {
+    if let Some(existing) = app.get_webview_window("config-editor") {
+        existing.set_focus().map_err(|err| ErrorDto {
+            kind: "configWindow".into(),
+            message: err.to_string(),
+        })?;
+        return Ok(());
+    }
+    tauri::WebviewWindowBuilder::new(
+        &app,
+        "config-editor",
+        tauri::WebviewUrl::App("config-window.html".into()),
+    )
+    .title("STFC Mod Config")
+    .inner_size(1000.0, 1100.0)
+    .min_inner_size(520.0, 480.0)
+    .build()
+    .map_err(|err| ErrorDto {
+        kind: "configWindow".into(),
+        message: err.to_string(),
+    })?;
     Ok(())
 }
 
@@ -857,6 +893,13 @@ pub async fn install_launcher_update(
     Ok(installed)
 }
 
+fn reset_launcher_data_error(message: impl Into<String>) -> ErrorDto {
+    ErrorDto {
+        kind: "resetLauncherData".into(),
+        message: message.into(),
+    }
+}
+
 fn open_logs_error(message: impl Into<String>) -> ErrorDto {
     ErrorDto {
         kind: "openLogs".into(),
@@ -913,6 +956,14 @@ mod tests {
 
         assert_eq!(error.kind, "openLogs");
         assert_eq!(error.message, "directory unavailable");
+    }
+
+    #[test]
+    fn reset_launcher_data_error_uses_command_kind() {
+        let error = reset_launcher_data_error("disk full");
+
+        assert_eq!(error.kind, "resetLauncherData");
+        assert_eq!(error.message, "disk full");
     }
 
     #[test]
